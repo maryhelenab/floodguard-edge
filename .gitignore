@@ -1,0 +1,56 @@
+﻿# Python cache
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.local
+*.pem
+*.key
+*.crt
+
+# Local application data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/buffer/
+*.log
+
+# IDE and editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dashboard dependencies and builds
+node_modules/
+dist/
+build/
+
+# AWS and infrastructure
+.aws-sam/
+.serverless/
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+cdk.out/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
