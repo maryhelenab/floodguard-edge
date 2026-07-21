@@ -24,10 +24,25 @@
             "max_value": 8.0,
             "unit": "mm/h"
         },
-    "water_level": {
-        "min_value": 10.0,
-        "max_value": 35.0,
-        "unit": "cm"
-        }
-    }   
+        "water_level": {
+            "min_value": 10.0,
+            "max_value": 35.0,
+            "unit": "cm"
+            },
+        "flow_rate": {
+            "min_value": 5.0,
+            "max_value": 30.0,
+            "unit": "L/s"
+            },
+        "soil_saturation": {
+            "min_value": 20.0,
+            "max_value": 60.0,
+            "unit": "percent"
+            },
+        "drain_blockage": {
+            "min_value": 0.0,
+            "max_value": 30.0,
+            "unit": "percent"
+            }
+        }   
 }
