@@ -54,3 +54,6 @@ cdk.out/
 tmp/
 temp/
 *.tmp
+
+# Backups of recreated virtual environments
+.venv-broken-*/

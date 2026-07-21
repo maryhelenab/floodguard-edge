@@ -1,0 +1,33 @@
+{
+  "mqtt": {
+    "host": "localhost",
+    "port": 1883,
+    "qos": 1,
+    "keepalive": 60,
+    "topic_prefix": "city/drainage"
+  },
+  "simulation": {
+    "scenario": "normal",
+    "random_seed": 42,
+    "interval_seconds": 1.0,
+    "readings_per_sensor": 5
+  },
+  "zones": [
+    "dublin-zone-01",
+    "dublin-zone-02",
+    "dublin-zone-03",
+    "dublin-zone-04"
+  ],
+    "sensor_profiles": {
+        "rainfall": {
+            "min_value": 0.0,
+            "max_value": 8.0,
+            "unit": "mm/h"
+        },
+    "water_level": {
+        "min_value": 10.0,
+        "max_value": 35.0,
+        "unit": "cm"
+        }
+    }   
+}
