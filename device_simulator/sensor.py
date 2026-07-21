@@ -1,5 +1,6 @@
 """Simple sensor simulator for FloodGuard Edge device."""
 import json
+import logging
 import random
 import time
 from datetime import datetime, timezone
@@ -7,8 +8,18 @@ from pathlib import Path
 import paho.mqtt.client as mqtt
 from shared.telemetry import TelemetryMessage
 
-
+# locate config.json in the same directory as this Python file
 CONFIG_PATH = Path(__file__).with_name("config.json")
+
+#Configure logging format used throughout the simulator
+# Info records nomal operations, while error records failures to connect to the MQTT broker
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+#create a logger specific for this Python module.
+logger = logging.getLogger(__name__)
+
 
 def load_config() -> dict:
     """Load configuration from config.json file."""
@@ -71,16 +82,29 @@ if __name__ == "__main__":
     number_of_samples = config["simulation"]["readings_per_sensor"]
     interval = config["simulation"]["interval_seconds"]
     zones = config["zones"]
-    print(f'Configured zones: {zones}')
     sensor_types = list(config['sensor_profiles'])
-    print(f"Configured sensors: {sensor_types}")
+    
+    # Atteempt to connect to the local MQTT broker 
+    # using the provided configuration. If the connection fails, log the error and exit the program.
+    try:
+        client = create_mqtt_client(config)
+    except OSError as error:
+        logger.error(
+            "Failed to connect to MQTT broker: %s", 
+            error,
+        )
+        raise SystemExit(1) from error
 
-    client = create_mqtt_client(config)
+    logger.info("Configured zones: %s", zones)
+    logger.info("Configured sensors: %s", sensor_types)
+    logger.info("Number of samples per sensor: %d", number_of_samples)
     time.sleep(1)  # Allow time for the MQTT client to connect
-    print(f'MQTT client connected: {client.is_connected()}')
+
+    logger.info('MQTT client connected: %s', client.is_connected())
+
 
     for zone_id in zones:
-        print(f'\nZone: {zone_id}')
+        logger.info('Processing zone: %s', zone_id)
 
         for sensor_type in sensor_types:
             topic = build_sensor_topic(
@@ -89,7 +113,7 @@ if __name__ == "__main__":
                 sensor_type=sensor_type
         )
 
-            print(f'\nMQTT topic: {topic}')
+            logger.info('Publishing to MQTT topic: %s', topic)
 
 
             for number in range(1, number_of_samples + 1):
@@ -110,10 +134,12 @@ if __name__ == "__main__":
 
                 result.wait_for_publish()
 
-                print(f"Published message {number} to topic {topic}")
+                logger.info("Published message %s to topic %s", number, topic)
+                logger.info("Waiting %s seconds before publishing the next message...", interval)
                 time.sleep(interval)
+
 
     client.loop_stop()
     client.disconnect()
 
-    print("Simulation completed. MQTT client disconnected.")
+    logger.info("Simulation completed. MQTT client disconnected.")
