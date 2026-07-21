@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 import paho.mqtt.client as mqtt
+from shared.telemetry import TelemetryMessage
 
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
@@ -30,15 +31,17 @@ def build_sensor_message(
     """Build a sensor message with the given configuration, zone ID, sensor type, and sequence number."""
     profile = config["sensor_profiles"][sensor_type]
 
-    return {
-        "device_id": f"{zone_id}-{sensor_type}-01",
-        "zone_id": zone_id,
-        "sensor_type": sensor_type,
-        "value": generate_sensor_value(config, sensor_type),
-        "unit": profile["unit"],
-        "sequence": sequence,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+    message = TelemetryMessage(
+        device_id=f'{zone_id}-{sensor_type}-01',
+        zone_id=zone_id,
+        sensor_type=sensor_type,
+        value=generate_sensor_value(config, sensor_type),
+        unit=profile["unit"],
+        sequence=sequence,
+        timestamp=datetime.now(timezone.utc)
+    )
+
+    return message.model_dump(mode="json")
 
 def build_sensor_topic(config: dict, zone_id: str, sensor_type: str) -> str:
     """Build the MQTT topic for sensor messages based on the configuration, zone ID, and sensor type."""
