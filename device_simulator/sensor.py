@@ -90,6 +90,14 @@ def create_mqtt_client(config: dict) -> mqtt.Client:
 
     return client
 
+def create_sensor_queues(zones: list[str], sensor_types: list[str]) -> dict:
+    """Create a dictionary of sensor queues for each zone and sensor type."""
+    return {
+        f'{zone_id}-{sensor_type}-01': deque()
+        for zone_id in zones
+        for sensor_type in sensor_types
+    }
+
 def dispatch_queued_messages(
         client: mqtt.Client,
         config: dict,
@@ -124,8 +132,8 @@ def dispatch_queued_messages(
 
     return total_dispatched
 
-if __name__ == "__main__":
-    config = load_config()
+def run_simulation(config: dict) -> None:
+    """Run the sensor simulation based on the provided configuration."""
     random.seed(config["simulation"]["random_seed"])
 
     number_of_samples = config["simulation"]["readings_per_sensor"]
@@ -138,11 +146,7 @@ if __name__ == "__main__":
     sensor_types = list(config["sensor_profiles"])
 
     # Create one unbounded local queue for each simulated sensor device.
-    sensor_queues ={
-        f'{zone_id}-{sensor_type}-01': deque()
-        for zone_id in zones
-        for sensor_type in sensor_types
-    }
+    sensor_queues = create_sensor_queues(zones=zones, sensor_types=sensor_types)
 
     # Attempt to connect to the local MQTT broker.
     # If the connection fails, log the error and exit the program.
@@ -256,3 +260,7 @@ if __name__ == "__main__":
         client.disconnect()
 
         logger.info("MQTT client disconnected safely.")
+
+if __name__ == "__main__":
+    configutation = load_config()
+    run_simulation(config=configutation)
