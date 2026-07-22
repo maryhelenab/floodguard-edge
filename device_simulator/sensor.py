@@ -44,12 +44,29 @@ def generate_sensor_value(config: dict, sensor_type: str, sequence: int) -> floa
 
     # Calculate the multiplier for the current reading based on the sequence number.
     if number_of_samples == 1:
-        multiplier = 1.0
+        progress = 1.0
     else:
-        multiplier = (sequence - 1) / (number_of_samples - 1)
+        progress = (sequence - 1) / (number_of_samples - 1)
 
-    # Gradually adjust the baseline value towards the target multiplier.
-    current_multiplier = 1.0 + (target_multiplier - 1.0) * multiplier
+    if scenario == 'developing_flood' and sensor_type == 'flow_rate':
+        # Flow rises initially, then declines as blockage reduces drainage capacity.
+        if progress <= 0.5:
+            current_multiplier = 1.0 + (target_multiplier - 1.0) * (progress / 0.5)
+        else:
+            decline_progress = (progress - 0.5) / 0.5
+            current_multiplier = target_multiplier - (target_multiplier - 1.0) * 0.5 * decline_progress
+
+    elif scenario == 'developing_flood' and sensor_type == 'water_level':
+        # Water level rises faster as drainage capacity becomes restricted
+        current_multiplier = 1.0 + (target_multiplier - 1.0) * (progress ** 2)
+
+    elif (scenario == 'developing_flood' and sensor_type == 'drain_blockage'):
+        # Blockage grows progressively as debris accumulates.
+        current_multiplier = 1.0 + (target_multiplier - 1.0) * (progress ** 1.5)
+
+    else:
+        # For other scenarios, the multiplier increases linearly.
+        current_multiplier = 1.0 + (target_multiplier - 1.0) * progress
 
     return round(baseline_value * current_multiplier, 2)
 
