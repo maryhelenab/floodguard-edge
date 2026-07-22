@@ -1,0 +1,81 @@
+{
+  "fog_node_id": "fog-node-dublin-01",
+  "zones": [
+    "dublin-zone-01",
+    "dublin-zone-02",
+    "dublin-zone-03",
+    "dublin-zone-04"
+  ],
+  "mqtt": {
+    "host": "localhost",
+    "port": 1883,
+    "keepalive": 60,
+    "qos": 1,
+    "client_id_prefix": "floodguard-fog",
+    "telemetry_subscription_topic": "city/drainage/+/+/telemetry",
+    "status_topic_template": "city/drainage/{zone_id}/fog/status",
+    "alert_topic_template": "city/drainage/{zone_id}/fog/alert",
+    "health_topic": "city/drainage/fog/health",
+    "health_enabled": false,
+    "retain_outputs": false
+  },
+  "processing": {
+    "required_sensor_types": [
+      "rainfall",
+      "water_level",
+      "flow_rate",
+      "soil_saturation",
+      "drain_blockage"
+    ],
+    "rolling_window_seconds": 60,
+    "minimum_samples_for_trend": 2,
+    "stale_message_validation_enabled": true,
+    "maximum_message_age_seconds": 60,
+    "reject_out_of_order": true,
+    "deduplication_cache_size": 10000,
+    "status_publish_interval_seconds": 5,
+    "alert_cooldown_seconds": 30,
+    "source_event_id_limit": 10
+  },
+  "risk": {
+    "flow_capacity_l_s": 30.0,
+    "normalisation": {
+      "water_level_critical_cm": 80.0,
+      "rainfall_critical_mm_h": 75.0,
+      "water_rise_rate_critical_cm_min": 10.0,
+      "drain_blockage_critical_percent": 80.0,
+      "soil_saturation_critical_percent": 90.0,
+      "drainage_stress_critical": 100.0
+    },
+    "weights": {
+      "water_level": 0.30,
+      "rainfall": 0.20,
+      "water_rise_rate": 0.20,
+      "drain_blockage": 0.10,
+      "soil_saturation": 0.10,
+      "drainage_stress": 0.10
+    },
+    "level_thresholds": {
+      "watch_min": 30.0,
+      "warning_min": 50.0,
+      "high_min": 70.0,
+      "critical_min": 85.0
+    },
+    "overrides": {
+      "water_level_critical_cm": 80.0,
+      "combined_water_level_critical_cm": 60.0,
+      "combined_blockage_critical_percent": 70.0,
+      "rapid_rise_high_cm_min": 10.0,
+      "heavy_rainfall_high_mm_h": 70.0,
+      "soil_saturation_high_percent": 90.0,
+      "heavy_rainfall_critical_mm_h": 70.0,
+      "blockage_critical_percent": 75.0
+    }
+  },
+  "persistence": {
+    "database_path": "data/fog/fog_events.db"
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}
