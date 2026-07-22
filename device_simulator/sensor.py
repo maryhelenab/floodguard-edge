@@ -3,6 +3,7 @@ import json
 import logging
 import random
 import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 import paho.mqtt.client as mqtt
@@ -89,14 +90,59 @@ def create_mqtt_client(config: dict) -> mqtt.Client:
 
     return client
 
+def dispatch_queued_messages(
+        client: mqtt.Client,
+        config: dict,
+        sensor_queues: dict,
+) -> int:
+    """publish all messages currently stored in the local sensor queues."""
+    total_dispatched = 0
+
+    # Process the queue belonging to each simulated sensor device.
+    for device_id, sensor_queue in sensor_queues.items():
+        # Continue until the current device queue is empty.
+        while sensor_queue:
+            topic, payload = sensor_queue[0]
+
+            result = client.publish(
+                topic=topic,
+                payload=payload,
+                qos=config["mqtt"]["qos"],
+            )
+
+            result.wait_for_publish()
+
+            # Remove the message from the queue after successful dispatch
+            sensor_queue.popleft()
+            total_dispatched += 1
+
+            logger.info(
+                "Dispatched queued messages from local queues: %s to topic %s",
+                device_id,
+                topic,
+            )
+
+    return total_dispatched
+
 if __name__ == "__main__":
     config = load_config()
     random.seed(config["simulation"]["random_seed"])
 
     number_of_samples = config["simulation"]["readings_per_sensor"]
-    interval = config["simulation"]["interval_seconds"]
+
+    # Read the separate interval for telemetry generation and MQTT dispatch.
+    generation_interval = config["simulation"]["generation_interval_seconds"]
+    dispatch_interval = config["simulation"]["dispatch_interval_seconds"]
+
     zones = config["zones"]
-    sensor_types = list(config['sensor_profiles'])
+    sensor_types = list(config["sensor_profiles"])
+
+    # Create one unbounded local queue for each simulated sensor device.
+    sensor_queues ={
+        f'{zone_id}-{sensor_type}-01': deque()
+        for zone_id in zones
+        for sensor_type in sensor_types
+    }
 
     # Attempt to connect to the local MQTT broker.
     # If the connection fails, log the error and exit the program.
@@ -112,54 +158,101 @@ if __name__ == "__main__":
     logger.info("Configured zones: %s", zones)
     logger.info("Configured sensors: %s", sensor_types)
     logger.info("Number of samples per sensor: %d", number_of_samples)
+    logger.info("Generation interval (seconds): %s", generation_interval)
+    logger.info("Dispatch interval (seconds): %s", dispatch_interval)
+    logger.info("Created %d local sensor queues", len(sensor_queues))
     time.sleep(1)  # Allow time for the MQTT client to connect
 
     logger.info('MQTT client connected: %s', client.is_connected())
 
-    # Run the simulation until all readings are published for all zones and sensor types.
-    try:
-        for zone_id in zones:
-            logger.info('Processing zone: %s', zone_id)
+    # Track when the last MQTT dispatch occured.
+    last_dispatch_time = time.monotonic()
 
-            for sensor_type in sensor_types:
-                topic = build_sensor_topic(
-                    config=config,
-                    zone_id=zone_id,
-                    sensor_type=sensor_type
+    # Generate telemetry and dispatch queued messages at separate intervals.
+    try:
+        for sequence in range(1, number_of_samples + 1):
+            logger.info(
+                'Generating reading batch %d of %d',
+                sequence,
+                number_of_samples,
             )
 
-                logger.info('Publishing to MQTT topic: %s', topic)
+            # Generate one reading for each sensor type in each zone and store it in the local queue.
+            for zone_id in zones:
+                for sensor_type in sensor_types:
+                    device_id = f'{zone_id}-{sensor_type}-01'
 
+                    topic = build_sensor_topic(
+                        config=config,
+                        zone_id=zone_id,
+                        sensor_type=sensor_type
+                    )
 
-                for number in range(1, number_of_samples + 1):
                     message = build_sensor_message(
                         config=config,
                         zone_id=zone_id,
                         sensor_type=sensor_type,
-                        sequence=number
+                        sequence=sequence,
                     )
 
                     payload = json.dumps(message)
 
-                    result = client.publish(
-                        topic=topic,
-                        payload=payload,
-                        qos=config["mqtt"]["qos"],
+                    # Store the message in the local queue for later dispatch.
+                    sensor_queues[device_id].append((topic, payload))
+
+                    logger.info(
+                        "Queued message %s for device %s",
+                        sequence,
+                        device_id,
                     )
 
-                    result.wait_for_publish()
+            # Generation and MQTT dispatch use idenpendent timers.
+            logger.info(
+                "Waiting for %s seconds before the next generation cycle",
+                generation_interval,
+            )
+            time.sleep(generation_interval)
 
-                    logger.info("Published message %s to topic %s", number, topic)
-                    logger.info("Waiting %s seconds before publishing the next message...", interval)
-                    time.sleep(interval)
-        logger.info('Simulation completed successfully.')
+            elapsed_since_dispatch = (
+                time.monotonic() - last_dispatch_time
+            )
+
+            if elapsed_since_dispatch >= dispatch_interval:
+                dispatched_count = dispatch_queued_messages(
+                    client=client,
+                    config=config,
+                    sensor_queues=sensor_queues,
+                )
+
+                logger.info(
+                    "Dispatched cycle published %d queued messages",
+                    dispatched_count,
+                )
+
+                last_dispatch_time = time.monotonic()
+
+        #Publish any messages remaining after the final generation cycle.
+        remaining_count = dispatch_queued_messages(
+            client=client,
+            config=config,
+            sensor_queues=sensor_queues,
+        )
+
+        if remaining_count > 0:
+            logger.info(
+                "Final dispatch published %d queued messages",
+                remaining_count,
+            )
+
+        logger.info("Simulation completed successfully.")
 
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully without displaying a traceback.
         logger.info("Simulation interrupted by user.")
 
     finally:
-        # Always stop the MQTT network loop and disconnect the client.        client.loop_stop()
+        # Always stop the MQTT network loop and disconnect the client.
+        client.loop_stop()
         client.disconnect()
 
         logger.info("MQTT client disconnected safely.")

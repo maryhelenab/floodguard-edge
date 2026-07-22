@@ -1,6 +1,7 @@
 """Shared telemetry models for FloodGuard Edge."""
 from datetime import datetime
 from typing import Literal
+from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 SensorType = Literal[
@@ -13,6 +14,7 @@ SensorType = Literal[
 
 class TelemetryMessage(BaseModel):
     """Telemetry message model for FloodGuard Edge device."""
+    event_id: UUID = Field(default_factory=uuid4, description="Unique identifier for the telemetry event.")
     device_id: str = Field(min_length=1, description="Unique identifier for the device sending the telemetry message.")
     zone_id: str = Field(min_length=1, description="Identifier for the zone where the sensor is located.")
     sensor_type: SensorType = Field(..., description="Type of the sensor.")

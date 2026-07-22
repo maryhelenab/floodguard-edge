@@ -9,7 +9,8 @@
   "simulation": {
     "scenario": "normal",
     "random_seed": 42,
-    "interval_seconds": 1.0,
+    "generation_interval_seconds": 1.0,
+    "dispatch_interval_seconds": 5.0,
     "readings_per_sensor": 5
   },
   "scenario_multipliers": {
