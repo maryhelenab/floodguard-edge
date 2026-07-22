@@ -84,13 +84,13 @@ if __name__ == "__main__":
     zones = config["zones"]
     sensor_types = list(config['sensor_profiles'])
     
-    # Atteempt to connect to the local MQTT broker 
-    # using the provided configuration. If the connection fails, log the error and exit the program.
+    # Attempt to connect to the local MQTT broker.
+    # If the connection fails, log the error and exit the program.
     try:
         client = create_mqtt_client(config)
     except OSError as error:
         logger.error(
-            "Failed to connect to MQTT broker: %s", 
+            "Failed to connect to MQTT broker: %s",
             error,
         )
         raise SystemExit(1) from error
