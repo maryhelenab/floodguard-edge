@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import cast, get_args
-from shared.telemetry import SensorType
+from shared.telemetry import SensorType, TelemetryMessage
 
 # Reuse the day 1 SensorType definition so the topic parser cannot
 # Silently introduce sensor names that are incompatible with the rest of the system.
@@ -10,6 +10,9 @@ VALID_SENSOR_TYPES = frozenset(get_args(SensorType))
 
 class InvalidTelemetryTopicError(ValueError):
     """Raised when a telemetry topic is invalid."""
+
+class TelemetryTopicMismatchError(ValueError):
+    """Raised when the MQTT topic does not match the telemetry payload."""
 
 @dataclass(frozen=True, slots=True)
 class ParsedTelemetryTopic:
@@ -63,3 +66,21 @@ def parse_telemetry_topic(topic: str) -> ParsedTelemetryTopic:
         zone_id=zone_id,
         sensor_type=cast(SensorType, sensor_type_str),
     )
+
+def validate_topic_matches_payload(
+        parsed_topic: ParsedTelemetryTopic,
+        telemetry: TelemetryMessage,
+) -> None:
+    """Ensure the telemetry payload matches its MQTT topic."""
+    if parsed_topic.zone_id != telemetry.zone_id:
+        raise TelemetryTopicMismatchError(
+            "Telemetry zone does not match the MQTT topic: "
+            f"topic={parsed_topic.zone_id!r}, payload={telemetry.zone_id!r}"
+        )
+
+    if parsed_topic.sensor_type != telemetry.sensor_type:
+        raise TelemetryTopicMismatchError(
+            "Telemetry sensor type does not match the MQTT topic: "
+            f"topic={parsed_topic.sensor_type!r}, "
+            f"payload={telemetry.sensor_type!r}"
+        )
