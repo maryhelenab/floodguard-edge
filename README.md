@@ -16,15 +16,20 @@ The current device simulator supports:
 
 - Four simulated urban zones
 - Five sensor types
-- MQTT telemetry publishing
-- MQTT Quality of Service level 1
+- MQTT telemetry publishing using Quality of Service level 1
+- One local telemetry queue for each simulated sensor device
+- Separate telemetry generation and MQTT dispatch intervals
+- Unique event identifiers using UUID
+- Independent sequence numbers for each sensor device
 - Pydantic telemetry validation
 - Structured INFO and ERROR logging
 - MQTT connection error handling
 - Graceful shutdown with Ctrl+C
 - Deterministic simulation using a fixed random seed
 - Normal and developing flood scenarios
-- Automated tests with pytest
+- Correlated developing-flood sensor behaviour
+- Automated testing with pytest
+- 13 automated tests with 88% total code coverage
 
 ## Simulated Zones
 
@@ -135,11 +140,14 @@ The simulator will:
 
 1. Load `device_simulator/config.json`.
 2. Connect to the local MQTT broker.
-3. Generate readings for every configured zone and sensor.
-4. Validate each message using Pydantic.
-5. Publish telemetry using MQTT QoS 1.
-6. Record operations using structured logging.
-7. Disconnect safely after completion or when interrupted with Ctrl+C.
+3. Create one local queue for each simulated sensor device.
+4. Generate readings for every configured zone and sensor.
+5. Assign a unique UUID event identifier to each reading.
+6. Validate each message using Pydantic.
+7. Store generated telemetry in the corresponding local queue.
+8. Dispatch queued messages separately using MQTT QoS 1.
+9. Record operations using structured logging.
+10. Disconnect safely after completion or when interrupted with Ctrl+C.
 
 ## MQTT Topics
 
@@ -167,6 +175,7 @@ Example telemetry payload:
 
 ```json
 {
+  "event_id": "8ea43af6-25c3-4e1e-a1cc-9759cb9711fe",
   "device_id": "dublin-zone-01-rainfall-01",
   "zone_id": "dublin-zone-01",
   "sensor_type": "rainfall",
@@ -187,6 +196,7 @@ The validation model checks that:
 - The measurement unit is not empty.
 - The sequence number is at least one.
 - The timestamp is valid.
+- The event identifier is a valid UUID.
 
 ## Simulation Scenarios
 
@@ -210,7 +220,7 @@ The normal scenario generates readings using the configured sensor ranges.
 "scenario": "developing_flood"
 ```
 
-The developing flood scenario applies progressively larger multipliers to rainfall, water level, flow rate, soil saturation, and drain blockage readings.
+The developing flood scenario models related sensor behaviour: rainfall increases, drain blockage accelerates, flow rate reaches a peak and then declines as drainage capacity is reduced, and water level rises more rapidly near the end of the scenario.
 
 A fixed random seed makes the generated values reproducible during testing.
 
@@ -238,25 +248,23 @@ Run the complete automated test suite:
 pytest -v
 ```
 
-The current tests verify that:
+The current 13 automated tests verify that:
 
 - Valid telemetry messages are accepted.
 - Invalid sequence numbers are rejected.
+- Each telemetry event receives a unique UUID.
+- MQTT topics follow the expected structure.
+- Sensor messages contain the required fields.
+- One local queue is created for each simulated device.
+- Queued messages are removed only after successful MQTT publication.
+- The complete simulation workflow can run with a mocked MQTT client.
 - Normal scenario values are reproducible.
-- Developing flood rainfall becomes higher than normal rainfall.
+- Developing flood rainfall increases.
+- Flow rate reaches a peak and then declines.
+- Water level rises more rapidly near the end.
+- Drain blockage growth accelerates.
 
-## Current Status
+Run the test suite with code coverage:
 
-Day 1 provides the initial sensor and MQTT telemetry foundation.
-
-Future development will add:
-
-- Local sensor queues
-- MQTT retry behaviour
-- Separate generation and publishing intervals
-- Fog-level flood risk evaluation
-- Local alerts
-- Cloud ingestion and storage
-- Scalable backend processing
-- Monitoring dashboard
-- AWS deployment
+```powershell
+pytest -v --cov=device_simulator --cov=shared --cov-report=term-missing
