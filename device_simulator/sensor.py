@@ -26,16 +26,31 @@ def load_config() -> dict:
     content = CONFIG_PATH.read_text(encoding="utf-8")
     return json.loads(content)
 
-def generate_sensor_value(config: dict, sensor_type: str) -> float:
-    """Generate a random sensor value based on the configuration and sensor type."""
+def generate_sensor_value(config: dict, sensor_type: str, sequence: int) -> float:
+    """Generate a sensor value according to the selected scenario and sensor type."""
     profile = config["sensor_profiles"][sensor_type]
+    scenario = config["simulation"]["scenario"]
 
-    value = random.uniform(
+    # Generate the baseline value using the configured sensor limits.
+    baseline_value = random.uniform(
         profile["min_value"],
         profile["max_value"]
         )
 
-    return round(value, 2)
+    # Read the final multiplier for the selected scenario and sensor.
+    target_multiplier = config["scenario_multipliers"][scenario][sensor_type]
+    number_of_samples = config["simulation"]["readings_per_sensor"]
+
+    # Calculate the multiplier for the current reading based on the sequence number.
+    if number_of_samples == 1:
+        multiplier = 1.0
+    else:
+        multiplier = (sequence - 1) / (number_of_samples - 1)
+
+    # Gradually adjust the baseline value towards the target multiplier.
+    current_multiplier = 1.0 + (target_multiplier - 1.0) * multiplier
+
+    return round(baseline_value * current_multiplier, 2)
 
 def build_sensor_message(
         config: dict, zone_id: str, sensor_type: str, sequence: int,) -> dict:
@@ -46,7 +61,7 @@ def build_sensor_message(
         device_id=f'{zone_id}-{sensor_type}-01',
         zone_id=zone_id,
         sensor_type=sensor_type,
-        value=generate_sensor_value(config, sensor_type),
+        value=generate_sensor_value(config=config, sensor_type=sensor_type, sequence=sequence),
         unit=profile["unit"],
         sequence=sequence,
         timestamp=datetime.now(timezone.utc)
@@ -73,7 +88,6 @@ def create_mqtt_client(config: dict) -> mqtt.Client:
     client.loop_start()
 
     return client
-
 
 if __name__ == "__main__":
     config = load_config()

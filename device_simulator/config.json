@@ -12,6 +12,22 @@
     "interval_seconds": 1.0,
     "readings_per_sensor": 5
   },
+  "scenario_multipliers": {
+    "normal": {
+      "rainfall": 1.0,
+      "water_level": 1.0,
+      "flow_rate": 1.0,
+      "soil_saturation": 1.0,
+      "drain_blockage": 1.0
+    },
+    "developing_flood":{
+      "rainfall": 3.0,
+      "water_level": 2.0,
+      "flow_rate": 1.8,
+      "soil_saturation": 1.5,
+      "drain_blockage": 2.5
+    }
+  },
   "zones": [
     "dublin-zone-01",
     "dublin-zone-02",
