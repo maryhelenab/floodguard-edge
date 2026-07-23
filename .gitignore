@@ -54,3 +54,11 @@ cdk.out/
 tmp/
 temp/
 *.tmp
+
+# Backups of recreated virtual environments
+.venv-broken-*/
+
+# Nested local databases
+data/**/*.db
+data/**/*.sqlite
+data/**/*.sqlite3

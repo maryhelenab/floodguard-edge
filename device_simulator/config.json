@@ -1,0 +1,65 @@
+{
+  "mqtt": {
+    "host": "localhost",
+    "port": 1883,
+    "qos": 1,
+    "keepalive": 60,
+    "topic_prefix": "city/drainage"
+  },
+  "simulation": {
+    "scenario": "normal",
+    "random_seed": 42,
+    "generation_interval_seconds": 1.0,
+    "dispatch_interval_seconds": 5.0,
+    "readings_per_sensor": 5
+  },
+  "scenario_multipliers": {
+    "normal": {
+      "rainfall": 1.0,
+      "water_level": 1.0,
+      "flow_rate": 1.0,
+      "soil_saturation": 1.0,
+      "drain_blockage": 1.0
+    },
+    "developing_flood":{
+      "rainfall": 3.0,
+      "water_level": 2.0,
+      "flow_rate": 1.8,
+      "soil_saturation": 1.5,
+      "drain_blockage": 2.5
+    }
+  },
+  "zones": [
+    "dublin-zone-01",
+    "dublin-zone-02",
+    "dublin-zone-03",
+    "dublin-zone-04"
+  ],
+    "sensor_profiles": {
+        "rainfall": {
+            "min_value": 0.0,
+            "max_value": 8.0,
+            "unit": "mm/h"
+        },
+        "water_level": {
+            "min_value": 10.0,
+            "max_value": 35.0,
+            "unit": "cm"
+            },
+        "flow_rate": {
+            "min_value": 5.0,
+            "max_value": 30.0,
+            "unit": "L/s"
+            },
+        "soil_saturation": {
+            "min_value": 20.0,
+            "max_value": 60.0,
+            "unit": "percent"
+            },
+        "drain_blockage": {
+            "min_value": 0.0,
+            "max_value": 30.0,
+            "unit": "percent"
+            }
+        }   
+}
