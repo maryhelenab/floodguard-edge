@@ -1,4 +1,4 @@
-﻿# Python cache
+# Python cache
 __pycache__/
 *.py[cod]
 *.pyd
@@ -62,3 +62,6 @@ temp/
 data/**/*.db
 data/**/*.sqlite
 data/**/*.sqlite3
+# AWS Lambda deployment packages
+infrastructure/*.zip
+infrastructure/lambda_*_package/
