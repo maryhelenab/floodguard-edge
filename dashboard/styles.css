@@ -1,10 +1,12 @@
-/* FloodGuard Edge - minimal dashboard */
+/* FloodGuard Edge dashboard styles.
+   Rules are grouped by page structure so each visual responsibility is clear. */
 
 * {
   box-sizing: border-box;
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Base page and typography */
 body {
   margin: 0;
   min-width: 320px;
@@ -26,6 +28,7 @@ button:focus-visible,
   outline-offset: 3px;
 }
 
+/* Header and API controls */
 header {
   display: flex;
   justify-content: space-between;
@@ -73,6 +76,7 @@ header p {
   cursor: wait;
 }
 
+/* Main page layout */
 main {
   width: min(92%, 1300px);
   margin: 0 auto;
@@ -87,6 +91,7 @@ h3 {
   color: #14394d;
 }
 
+/* Reusable card surface */
 .card {
   padding: 17px;
   border: 1px solid #d8e3e8;
@@ -103,6 +108,7 @@ h3 {
   background: #fff3ca;
 }
 
+/* Zone overview cards */
 .zone-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -139,6 +145,7 @@ h3 {
   cursor: pointer;
 }
 
+/* Selected-zone details */
 .section-title {
   display: flex;
   justify-content: space-between;
@@ -165,6 +172,7 @@ h3 {
   font-weight: bold;
 }
 
+/* Latest sensor readings */
 .sensor-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -188,6 +196,7 @@ h3 {
   font-size: 1.5rem;
 }
 
+/* Risk labels use the same classes created by app.js */
 .risk-badge {
   display: inline-block;
   padding: 6px 12px;
@@ -234,6 +243,7 @@ h3 {
   background: #6e1720;
 }
 
+/* History charts */
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -254,6 +264,7 @@ h3 {
   text-align: center;
 }
 
+/* Recent alert cards */
 .alerts-list {
   display: grid;
   gap: 10px;
@@ -276,6 +287,7 @@ h3 {
   margin: 5px 0;
 }
 
+/* Footer */
 footer {
   padding: 18px;
   text-align: center;
@@ -284,6 +296,7 @@ footer {
   background: white;
 }
 
+/* Responsive adjustments for smaller screens */
 @media (max-width: 950px) {
   .zone-grid {
     grid-template-columns: repeat(2, 1fr);

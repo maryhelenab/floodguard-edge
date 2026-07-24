@@ -1,4 +1,8 @@
-"""Validated MQTT output models produced by the FloodGuard fog node."""
+"""Validated output contracts produced by the FloodGuard fog node.
+
+These models are published to MQTT, stored locally, forwarded to AWS, and
+consumed by the dashboard, so stable field names are important.
+"""
 
 from typing import Literal
 from uuid import UUID, uuid4
@@ -30,6 +34,7 @@ AlertSeverity = Literal[
 ]
 
 
+# Shared serialisation rules for all fog outputs.
 class FogOutputModel(BaseModel):
     """Shared strict configuration for fog-node output messages."""
 
@@ -39,6 +44,7 @@ class FogOutputModel(BaseModel):
     )
 
 
+# Latest raw measurement from each sensor type.
 class SensorSnapshot(FogOutputModel):
     """Latest accepted value for every supported sensor type."""
 
@@ -49,6 +55,7 @@ class SensorSnapshot(FogOutputModel):
     drain_blockage: float | None = Field(default=None, ge=0.0)
 
 
+# Values calculated locally from several raw readings.
 class DerivedMetrics(FogOutputModel):
     """Metrics derived locally from accepted telemetry."""
 
@@ -57,6 +64,7 @@ class DerivedMetrics(FogOutputModel):
     drainage_stress_score: float = Field(ge=0.0, le=100.0)
 
 
+# Number of readings currently present in each rolling window.
 class SampleCounts(FogOutputModel):
     """Number of samples currently stored in each rolling window."""
 
@@ -67,6 +75,7 @@ class SampleCounts(FogOutputModel):
     drain_blockage: int = Field(default=0, ge=0)
 
 
+# Periodic full state used by the cloud API and dashboard.
 class FogStatus(FogOutputModel):
     """Aggregated processing status for one monitored urban zone."""
 
@@ -123,6 +132,7 @@ class FogStatus(FogOutputModel):
         return self
 
 
+# Event emitted only when a serious condition needs attention.
 class FogAlert(FogOutputModel):
     """Immediate flood-risk escalation alert produced by the fog node."""
 

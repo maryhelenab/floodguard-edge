@@ -1,4 +1,8 @@
-"""Validated configuration models for the FloodGuard fog node"""
+"""Load and validate every setting used by the FloodGuard fog node.
+
+Pydantic rejects invalid configuration before the node starts, preventing
+runtime errors in MQTT, risk calculation, and persistence.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 from shared.telemetry import SensorType
 
 
+# MQTT connection and topic settings.
 class MqttSettings(BaseModel):
     """MQTT settings for the FloodGuard fog node"""
 
@@ -33,6 +38,7 @@ class MqttSettings(BaseModel):
     retain_outputs: bool = Field(default=False, description="Whether to retain output messages")
 
 
+# Local validation, rolling-window, and publication settings.
 class ProcessingSettings(BaseModel):
     """Processing settings for the FloodGuard fog node"""
 
@@ -98,6 +104,7 @@ class ProcessingSettings(BaseModel):
         return self
 
 
+# Raw values used to convert each sensor measurement to a 0-100 score.
 class RiskNormalisationSettings(BaseModel):
     """Risk normalization settings for the FloodGuard fog node"""
 
@@ -132,6 +139,7 @@ class RiskNormalisationSettings(BaseModel):
     )
 
 
+# Relative importance of each component in the final weighted score.
 class RiskWeights(BaseModel):
     """Weights applied to the normalised flood-risk components."""
 
@@ -192,6 +200,7 @@ class RiskWeights(BaseModel):
         return self
 
 
+# Boundaries that map a score to NORMAL, WATCH, WARNING, HIGH, or CRITICAL.
 class RiskLevelThresholds(BaseModel):
     """Thresholds for determining risk levels based on calculated risk score."""
 
@@ -236,6 +245,7 @@ class RiskLevelThresholds(BaseModel):
         return self
 
 
+# Safety rules that can raise the level even when the weighted score is lower.
 class RiskOverrides(BaseModel):
     """Overrides for risk level thresholds based on specific conditions."""
 
@@ -283,6 +293,7 @@ class RiskOverrides(BaseModel):
     )
 
 
+# Complete risk-engine configuration.
 class RiskSettings(BaseModel):
     """Risk settings for the FloodGuard fog node"""
 
@@ -298,6 +309,7 @@ class RiskSettings(BaseModel):
     overrides: RiskOverrides
 
 
+# Local SQLite persistence settings.
 class PersistenceSettings(BaseModel):
     """Persistence settings for the FloodGuard fog node"""
 
@@ -307,6 +319,7 @@ class PersistenceSettings(BaseModel):
     )
 
 
+# Application log verbosity.
 class LoggingSettings(BaseModel):
     """Logging settings for the FloodGuard fog node"""
 
@@ -318,6 +331,7 @@ class LoggingSettings(BaseModel):
     )
 
 
+# Root object combining every configuration section.
 class FogConfig(BaseModel):
     """Completed validated configuration for the FloodGuard fog node"""
 
@@ -366,6 +380,7 @@ def load_fog_config(
         else DEFAULT_CONFIG_PATH
     )
 
+    # Report file and JSON errors clearly before Pydantic validates fields.
     try:
         raw_config = json.loads(
             path.read_text(encoding="utf-8")
@@ -379,4 +394,5 @@ def load_fog_config(
             f"Configuration file at {path} is not valid JSON"
         ) from exc
 
+    # Validate nested types, numeric ranges, and cross-field rules.
     return FogConfig.model_validate(raw_config)

@@ -7,6 +7,7 @@
   <link rel="icon" href="data:,">
   <title>FloodGuard Edge</title>
 
+  <!-- Page styles are local; Chart.js is the only external browser library. -->
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
   <script src="config.js" defer></script>
@@ -14,6 +15,7 @@
 </head>
 
 <body>
+  <!-- Global title, API health, update time, and manual refresh control. -->
   <header>
     <div>
       <h1>FloodGuard Edge</h1>
@@ -30,11 +32,13 @@
   <main>
     <p id="message" class="message" hidden></p>
 
+    <!-- JavaScript creates one summary card for every configured zone. -->
     <section>
       <h2>Monitoring zones</h2>
       <div id="zone-grid" class="zone-grid"></div>
     </section>
 
+    <!-- Detailed view of the currently selected zone. -->
     <section>
       <div class="section-title">
         <div>
@@ -52,7 +56,7 @@
         <div class="details-grid">
           <article class="card">
             <h3>Current risk</h3>
-            <p class="large-value" id="risk-score">—</p>
+            <p class="large-value" id="risk-score">â€”</p>
             <p>Risk score</p>
           </article>
 
@@ -69,40 +73,42 @@
 
         <h3>Latest sensor readings</h3>
 
+        <!-- IDs are stable hooks used by app.js to update each reading. -->
         <div class="sensor-grid">
           <article class="card sensor">
             <span>Rainfall</span>
-            <strong id="rainfall">—</strong>
+            <strong id="rainfall">â€”</strong>
             <small>mm/h</small>
           </article>
 
           <article class="card sensor">
             <span>Water level</span>
-            <strong id="water-level">—</strong>
+            <strong id="water-level">â€”</strong>
             <small>cm</small>
           </article>
 
           <article class="card sensor">
             <span>Flow rate</span>
-            <strong id="flow-rate">—</strong>
+            <strong id="flow-rate">â€”</strong>
             <small>L/s</small>
           </article>
 
           <article class="card sensor">
             <span>Soil saturation</span>
-            <strong id="soil-saturation">—</strong>
+            <strong id="soil-saturation">â€”</strong>
             <small>%</small>
           </article>
 
           <article class="card sensor">
             <span>Drain blockage</span>
-            <strong id="drain-blockage">—</strong>
+            <strong id="drain-blockage">â€”</strong>
             <small>%</small>
           </article>
         </div>
       </div>
     </section>
 
+    <!-- Recent status records are converted into three Chart.js line charts. -->
     <section>
       <h2>History charts</h2>
 
@@ -125,6 +131,7 @@
       </p>
     </section>
 
+    <!-- Alert cards are created dynamically from the public alerts route. -->
     <section>
       <h2>Recent alerts</h2>
       <div id="alerts-list" class="alerts-list">
@@ -133,6 +140,7 @@
     </section>
   </main>
 
+  <!-- Security note: the browser only calls a public read-only API. -->
   <footer>
     Public AWS API only. No AWS credentials are stored in the browser.
   </footer>

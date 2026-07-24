@@ -1,4 +1,4 @@
-"""Parsing and validation utilities for MQTT topics."""
+"""Parse MQTT telemetry topics and verify that topic and payload agree."""
 
 from dataclasses import dataclass
 from typing import cast, get_args
@@ -21,6 +21,7 @@ class ParsedTelemetryTopic:
     zone_id: str
     sensor_type: SensorType
 
+# Expected format: city/drainage/{zone}/{sensor}/{device}/telemetry
 def parse_telemetry_topic(topic: str) -> ParsedTelemetryTopic:
     """Parse a telemetry topic into its structured components.
 
@@ -33,6 +34,7 @@ def parse_telemetry_topic(topic: str) -> ParsedTelemetryTopic:
     Raises:
         InvalidTelemetryTopicError: If the topic is invalid.
     """
+    # Splitting once makes every segment easy to validate explicitly.
     parts = topic.split("/")
 
     if len(parts) != 5:
@@ -72,6 +74,7 @@ def validate_topic_matches_payload(
         telemetry: TelemetryMessage,
 ) -> None:
     """Ensure the telemetry payload matches its MQTT topic."""
+    # Mismatches could route a reading into the wrong zone or sensor window.
     if parsed_topic.zone_id != telemetry.zone_id:
         raise TelemetryTopicMismatchError(
             "Telemetry zone does not match the MQTT topic: "

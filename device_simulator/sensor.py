@@ -1,4 +1,8 @@
-"""Simple sensor simulator for FloodGuard Edge device."""
+"""Generate realistic sensor readings and publish them to MQTT.
+
+The simulator represents the IoT/device layer of FloodGuard. It can also
+buffer readings locally when MQTT publication fails and retry them later.
+"""
 
 import json
 import logging
@@ -13,6 +17,7 @@ import paho.mqtt.client as mqtt
 from shared.telemetry import TelemetryMessage
 
 
+# Resolve the JSON configuration beside this file, not from the shell directory.
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
 # Hard limits prevent an edited configuration file from creating
@@ -30,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_config() -> dict:
-    """Load configuration from config.json."""
+    """Read the simulator settings from ``config.json``."""
     content = CONFIG_PATH.read_text(encoding="utf-8")
     return json.loads(content)
 
@@ -64,6 +69,10 @@ def validate_interval(value: object, field_name: str) -> float:
 
     return safe_value
 
+
+# ---------------------------------------------------------------------------
+# Sensor data generation
+# ---------------------------------------------------------------------------
 
 def generate_sensor_value(
     config: dict,
@@ -124,6 +133,10 @@ def generate_sensor_value(
     return round(baseline_value * current_multiplier, 2)
 
 
+# ---------------------------------------------------------------------------
+# MQTT message construction
+# ---------------------------------------------------------------------------
+
 def build_sensor_message(
     config: dict,
     zone_id: str,
@@ -159,6 +172,10 @@ def build_sensor_topic(
     prefix = config["mqtt"]["topic_prefix"]
     return f"{prefix}/{zone_id}/{sensor_type}/telemetry"
 
+
+# ---------------------------------------------------------------------------
+# MQTT connection and local buffering
+# ---------------------------------------------------------------------------
 
 def create_mqtt_client(config: dict) -> mqtt.Client:
     """Create and connect the MQTT client."""
@@ -215,8 +232,13 @@ def dispatch_queued_messages(
     return total_dispatched
 
 
+# ---------------------------------------------------------------------------
+# Main simulation loop
+# ---------------------------------------------------------------------------
+
 def run_simulation(config: dict) -> None:
     """Run the configured sensor simulation."""
+    # Validate all run controls before creating messages or opening MQTT.
     simulation_config = config["simulation"]
 
     random.seed(simulation_config["random_seed"])
@@ -241,6 +263,7 @@ def run_simulation(config: dict) -> None:
     zones = config["zones"]
     sensor_types = list(config["sensor_profiles"])
 
+    # Each simulated sensor gets its own bounded offline queue.
     sensor_queues = create_sensor_queues(
         zones=zones,
         sensor_types=sensor_types,
@@ -265,6 +288,7 @@ def run_simulation(config: dict) -> None:
     try:
         # The loop has a constant upper bound. The validated requested
         # number controls when execution stops.
+        # Every cycle produces one reading for every zone/sensor pair.
         for sequence in range(1, MAX_READINGS_PER_SENSOR + 1):
             if sequence > number_of_samples:
                 break
@@ -316,6 +340,7 @@ def run_simulation(config: dict) -> None:
 
                 last_dispatch_time = time.monotonic()
 
+        # Flush any readings still queued after the final generation cycle.
         remaining_count = dispatch_queued_messages(
             client=client,
             config=config,

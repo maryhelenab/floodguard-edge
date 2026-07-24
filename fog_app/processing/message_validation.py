@@ -1,4 +1,4 @@
-"""Freshness and sequence validation for incoming telemetry messages."""
+"""Reject stale timestamps and out-of-order device sequence numbers."""
 
 from datetime import datetime, timezone
 
@@ -18,6 +18,7 @@ def is_stale_message(
     if maximum_age_seconds < 0:
         raise ValueError("Maximum message age cannot be negative.")
 
+    # Tests can inject time; production uses the current UTC time.
     reference_time = now or datetime.now(timezone.utc)
 
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
@@ -69,6 +70,7 @@ class DeviceSequenceTracker:
         if sequence < 1:
             raise ValueError("Sequence number must be at least 1.")
 
+        # Sequence numbers increase independently for every device.
         latest_sequence = self._latest_sequences.get(device_id)
 
         if latest_sequence is not None and sequence <= latest_sequence:
