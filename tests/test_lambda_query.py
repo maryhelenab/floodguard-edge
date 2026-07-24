@@ -1,24 +1,11 @@
 """Tests for the query Lambda, using moto to mock DynamoDB."""
 
 import json
-import os
-
-import boto3
-import pytest
-from moto import mock_aws
-
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
-os.environ.setdefault("AWS_SECURITY_TOKEN", "testing")
-os.environ.setdefault("AWS_SESSION_TOKEN", "testing")
-os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
 from backend import lambda_query  # noqa: E402  (env vars must be set first)
 
-
 TABLE_NAME = lambda_query.TABLE_NAME
 ZONE_ID = "dublin-zone-01"
-
 
 def api_gateway_event(
     route_key: str,
@@ -37,7 +24,6 @@ def api_gateway_event(
 
     return event
 
-
 def status_item(timestamp_ms: int, event_id: str) -> dict:
     """Build one status item matching the storage schema."""
 
@@ -53,7 +39,6 @@ def status_item(timestamp_ms: int, event_id: str) -> dict:
         "mqtt_topic": f"city/drainage/{ZONE_ID}/fog/status",
         "payload_json": json.dumps({"risk_level": "WARNING"}),
     }
-
 
 def alert_item(timestamp_ms: int, event_id: str) -> dict:
     """Build one alert item matching the storage schema."""
@@ -71,40 +56,10 @@ def alert_item(timestamp_ms: int, event_id: str) -> dict:
         "payload_json": json.dumps({"severity": "CRITICAL"}),
     }
 
-
-@pytest.fixture
-def dynamodb_table():
-    """Create a mocked DynamoDB table matching the project schema."""
-
-    with mock_aws():
-        client = boto3.resource(
-            "dynamodb",
-            region_name="us-east-1",
-        )
-
-        table = client.create_table(
-            TableName=TABLE_NAME,
-            KeySchema=[
-                {"AttributeName": "pk", "KeyType": "HASH"},
-                {"AttributeName": "sk", "KeyType": "RANGE"},
-            ],
-            AttributeDefinitions=[
-                {"AttributeName": "pk", "AttributeType": "S"},
-                {"AttributeName": "sk", "AttributeType": "S"},
-            ],
-            BillingMode="PAY_PER_REQUEST",
-        )
-
-        table.wait_until_exists()
-
-        yield table
-
-
 def body_of(response: dict) -> dict:
     """Parse the JSON body of a Lambda API Gateway response."""
 
     return json.loads(response["body"])
-
 
 def test_health_route(dynamodb_table) -> None:
     response = lambda_query.lambda_handler(
@@ -115,7 +70,6 @@ def test_health_route(dynamodb_table) -> None:
     assert response["statusCode"] == 200
     assert body_of(response)["status"] == "healthy"
 
-
 def test_zones_route(dynamodb_table) -> None:
     response = lambda_query.lambda_handler(
         api_gateway_event("GET /zones"),
@@ -124,7 +78,6 @@ def test_zones_route(dynamodb_table) -> None:
 
     assert response["statusCode"] == 200
     assert body_of(response)["count"] == 4
-
 
 def test_unknown_zone_returns_404(dynamodb_table) -> None:
     response = lambda_query.lambda_handler(
@@ -137,7 +90,6 @@ def test_unknown_zone_returns_404(dynamodb_table) -> None:
 
     assert response["statusCode"] == 404
 
-
 def test_missing_zone_id_returns_400(dynamodb_table) -> None:
     response = lambda_query.lambda_handler(
         api_gateway_event("GET /zones/{zone_id}/latest"),
@@ -145,7 +97,6 @@ def test_missing_zone_id_returns_400(dynamodb_table) -> None:
     )
 
     assert response["statusCode"] == 400
-
 
 def test_latest_status_not_found_returns_404(
     dynamodb_table,
@@ -159,7 +110,6 @@ def test_latest_status_not_found_returns_404(
     )
 
     assert response["statusCode"] == 404
-
 
 def test_latest_status_returns_most_recent(
     dynamodb_table,
@@ -184,7 +134,6 @@ def test_latest_status_returns_most_recent(
     assert body["event_id"] == "newer-event"
     assert body["payload"]["risk_level"] == "WARNING"
 
-
 def test_history_returns_items_ordered_and_respects_limit(
     dynamodb_table,
 ) -> None:
@@ -208,7 +157,6 @@ def test_history_returns_items_ordered_and_respects_limit(
     # Newest first.
     assert body["items"][0]["event_id"] == "event-4"
 
-
 def test_alerts_route_returns_only_alerts(
     dynamodb_table,
 ) -> None:
@@ -231,7 +179,6 @@ def test_alerts_route_returns_only_alerts(
     assert body["count"] == 1
     assert body["items"][0]["event_id"] == "alert-event"
 
-
 def test_invalid_limit_returns_400(dynamodb_table) -> None:
     response = lambda_query.lambda_handler(
         api_gateway_event(
@@ -243,7 +190,6 @@ def test_invalid_limit_returns_400(dynamodb_table) -> None:
     )
 
     assert response["statusCode"] == 400
-
 
 def test_unknown_route_without_zone_returns_400(
     dynamodb_table,
@@ -257,7 +203,6 @@ def test_unknown_route_without_zone_returns_400(
 
     assert response["statusCode"] == 400
 
-
 def test_unknown_route_with_zone_returns_404(
     dynamodb_table,
 ) -> None:
@@ -270,8 +215,6 @@ def test_unknown_route_with_zone_returns_404(
     )
 
     assert response["statusCode"] == 404
-
-
 
 def test_unexpected_error_returns_500(dynamodb_table) -> None:
     # A non-numeric, non-castable limit triggers a TypeError inside
@@ -287,7 +230,6 @@ def test_unexpected_error_returns_500(dynamodb_table) -> None:
 
     assert response["statusCode"] == 500
     assert body_of(response)["detail"] == "Internal server error."
-
 
 def test_response_includes_cors_header(dynamodb_table) -> None:
 

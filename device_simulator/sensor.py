@@ -1,4 +1,5 @@
 """Simple sensor simulator for FloodGuard Edge device."""
+
 import json
 import logging
 import random
@@ -6,126 +7,194 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
+
 import paho.mqtt.client as mqtt
+
 from shared.telemetry import TelemetryMessage
 
-# locate config.json in the same directory as this Python file
+
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
-# Configure logging format used throughout the simulator
-# Info records nomal operations, while error records failures to connect to the MQTT broker
+# Hard limits prevent an edited configuration file from creating
+# unbounded loops or excessively long sleep intervals.
+MAX_READINGS_PER_SENSOR = 1000
+MAX_INTERVAL_SECONDS = 3600.0
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
-# Create a logger specific for this Python module.
+)
+
 logger = logging.getLogger(__name__)
 
 
 def load_config() -> dict:
-    """Load configuration from config.json file."""
+    """Load configuration from config.json."""
     content = CONFIG_PATH.read_text(encoding="utf-8")
     return json.loads(content)
 
-def generate_sensor_value(config: dict, sensor_type: str, sequence: int) -> float:
-    """Generate a sensor value according to the selected scenario and sensor type."""
+
+def validate_reading_count(value: object) -> int:
+    """Return a safe number of readings for one simulation run."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("readings_per_sensor must be an integer.")
+
+    if not 1 <= value <= MAX_READINGS_PER_SENSOR:
+        raise ValueError(
+            "readings_per_sensor must be between "
+            f"1 and {MAX_READINGS_PER_SENSOR}."
+        )
+
+    return value
+
+
+def validate_interval(value: object, field_name: str) -> float:
+    """Return a safe non-negative simulation interval."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be numeric.")
+
+    safe_value = float(value)
+
+    if not 0.0 <= safe_value <= MAX_INTERVAL_SECONDS:
+        raise ValueError(
+            f"{field_name} must be between 0 and "
+            f"{MAX_INTERVAL_SECONDS} seconds."
+        )
+
+    return safe_value
+
+
+def generate_sensor_value(
+    config: dict,
+    sensor_type: str,
+    sequence: int,
+) -> float:
+    """Generate a value for the selected scenario and sensor type."""
     profile = config["sensor_profiles"][sensor_type]
     scenario = config["simulation"]["scenario"]
 
-    # Generate the baseline value using the configured sensor limits.
     baseline_value = random.uniform(
         profile["min_value"],
-        profile["max_value"]
-        )
+        profile["max_value"],
+    )
 
-    # Read the final multiplier for the selected scenario and sensor.
     target_multiplier = config["scenario_multipliers"][scenario][sensor_type]
     number_of_samples = config["simulation"]["readings_per_sensor"]
 
-    # Calculate the multiplier for the current reading based on the sequence number.
     if number_of_samples == 1:
         progress = 1.0
     else:
         progress = (sequence - 1) / (number_of_samples - 1)
 
-    if scenario == 'developing_flood' and sensor_type == 'flow_rate':
-        # Flow rises initially, then declines as blockage reduces drainage capacity.
+    if scenario == "developing_flood" and sensor_type == "flow_rate":
         if progress <= 0.5:
-            current_multiplier = 1.0 + (target_multiplier - 1.0) * (progress / 0.5)
+            current_multiplier = (
+                1.0
+                + (target_multiplier - 1.0)
+                * (progress / 0.5)
+            )
         else:
             decline_progress = (progress - 0.5) / 0.5
-            current_multiplier = target_multiplier - (target_multiplier - 1.0) * 0.5 * decline_progress
-
-    elif scenario == 'developing_flood' and sensor_type == 'water_level':
-        # Water level rises faster as drainage capacity becomes restricted
-        current_multiplier = 1.0 + (target_multiplier - 1.0) * (progress ** 2)
-
-    elif (scenario == 'developing_flood' and sensor_type == 'drain_blockage'):
-        # Blockage grows progressively as debris accumulates.
-        current_multiplier = 1.0 + (target_multiplier - 1.0) * (progress ** 1.5)
-
+            current_multiplier = (
+                target_multiplier
+                - (target_multiplier - 1.0)
+                * 0.5
+                * decline_progress
+            )
+    elif scenario == "developing_flood" and sensor_type == "water_level":
+        current_multiplier = (
+            1.0
+            + (target_multiplier - 1.0)
+            * (progress ** 2)
+        )
+    elif scenario == "developing_flood" and sensor_type == "drain_blockage":
+        current_multiplier = (
+            1.0
+            + (target_multiplier - 1.0)
+            * (progress ** 1.5)
+        )
     else:
-        # For other scenarios, the multiplier increases linearly.
-        current_multiplier = 1.0 + (target_multiplier - 1.0) * progress
+        current_multiplier = (
+            1.0
+            + (target_multiplier - 1.0)
+            * progress
+        )
 
     return round(baseline_value * current_multiplier, 2)
 
+
 def build_sensor_message(
-        config: dict, zone_id: str, sensor_type: str, sequence: int,) -> dict:
-    """Build a sensor message with the given configuration, zone ID, sensor type, and sequence number."""
+    config: dict,
+    zone_id: str,
+    sensor_type: str,
+    sequence: int,
+) -> dict:
+    """Build one validated telemetry message."""
     profile = config["sensor_profiles"][sensor_type]
 
     message = TelemetryMessage(
-        device_id=f'{zone_id}-{sensor_type}-01',
+        device_id=f"{zone_id}-{sensor_type}-01",
         zone_id=zone_id,
         sensor_type=sensor_type,
-        value=generate_sensor_value(config=config, sensor_type=sensor_type, sequence=sequence),
+        value=generate_sensor_value(
+            config=config,
+            sensor_type=sensor_type,
+            sequence=sequence,
+        ),
         unit=profile["unit"],
         sequence=sequence,
-        timestamp=datetime.now(timezone.utc)
+        timestamp=datetime.now(timezone.utc),
     )
 
     return message.model_dump(mode="json")
 
-def build_sensor_topic(config: dict, zone_id: str, sensor_type: str) -> str:
-    """Build the MQTT topic for sensor messages based on the configuration, zone ID, and sensor type."""
-    prefix = config["mqtt"]["topic_prefix"]
 
+def build_sensor_topic(
+    config: dict,
+    zone_id: str,
+    sensor_type: str,
+) -> str:
+    """Build the MQTT telemetry topic."""
+    prefix = config["mqtt"]["topic_prefix"]
     return f"{prefix}/{zone_id}/{sensor_type}/telemetry"
 
+
 def create_mqtt_client(config: dict) -> mqtt.Client:
-    """Create and configure an MQTT client based on the configuration."""
+    """Create and connect the MQTT client."""
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
     client.connect(
         host=config["mqtt"]["host"],
         port=config["mqtt"]["port"],
-        keepalive=config["mqtt"]["keepalive"]
+        keepalive=config["mqtt"]["keepalive"],
     )
 
     client.loop_start()
-
     return client
 
-def create_sensor_queues(zones: list[str], sensor_types: list[str]) -> dict:
-    """Create a dictionary of sensor queues for each zone and sensor type."""
+
+def create_sensor_queues(
+    zones: list[str],
+    sensor_types: list[str],
+) -> dict:
+    """Create one local queue for each simulated sensor."""
     return {
-        f'{zone_id}-{sensor_type}-01': deque()
+        f"{zone_id}-{sensor_type}-01": deque()
         for zone_id in zones
         for sensor_type in sensor_types
     }
 
+
 def dispatch_queued_messages(
-        client: mqtt.Client,
-        config: dict,
-        sensor_queues: dict,
+    client: mqtt.Client,
+    config: dict,
+    sensor_queues: dict,
 ) -> int:
-    """publish all messages currently stored in the local sensor queues."""
+    """Publish all messages currently stored in local queues."""
     total_dispatched = 0
 
-    # Process the queue belonging to each simulated sensor device.
-    for device_id, sensor_queue in sensor_queues.items():
-        # Continue until the current device queue is empty.
+    for sensor_queue in sensor_queues.values():
         while sensor_queue:
             topic, payload = sensor_queue[0]
 
@@ -136,77 +205,80 @@ def dispatch_queued_messages(
             )
 
             result.wait_for_publish()
-
-            # Remove the message from the queue after successful dispatch
             sensor_queue.popleft()
             total_dispatched += 1
 
-            logger.info(
-                "Dispatched queued messages from local queues: %s to topic %s",
-                device_id,
-                topic,
-            )
+            # Do not log device IDs, topics or payload values loaded
+            # from the external configuration file.
+            logger.debug("Dispatched one queued sensor message.")
 
     return total_dispatched
 
+
 def run_simulation(config: dict) -> None:
-    """Run the sensor simulation based on the provided configuration."""
-    random.seed(config["simulation"]["random_seed"])
+    """Run the configured sensor simulation."""
+    simulation_config = config["simulation"]
 
-    number_of_samples = config["simulation"]["readings_per_sensor"]
+    random.seed(simulation_config["random_seed"])
 
-    # Read the separate interval for telemetry generation and MQTT dispatch.
-    generation_interval = config["simulation"]["generation_interval_seconds"]
-    dispatch_interval = config["simulation"]["dispatch_interval_seconds"]
+    number_of_samples = validate_reading_count(
+        simulation_config["readings_per_sensor"]
+    )
+
+    # Store the validated value so generate_sensor_value uses it.
+    simulation_config["readings_per_sensor"] = number_of_samples
+
+    generation_interval = validate_interval(
+        simulation_config["generation_interval_seconds"],
+        "generation_interval_seconds",
+    )
+
+    dispatch_interval = validate_interval(
+        simulation_config["dispatch_interval_seconds"],
+        "dispatch_interval_seconds",
+    )
 
     zones = config["zones"]
     sensor_types = list(config["sensor_profiles"])
 
-    # Create one unbounded local queue for each simulated sensor device.
-    sensor_queues = create_sensor_queues(zones=zones, sensor_types=sensor_types)
+    sensor_queues = create_sensor_queues(
+        zones=zones,
+        sensor_types=sensor_types,
+    )
 
-    # Attempt to connect to the local MQTT broker.
-    # If the connection fails, log the error and exit the program.
     try:
         client = create_mqtt_client(config)
     except OSError as error:
-        logger.error(
-            "Failed to connect to MQTT broker: %s",
-            error,
-        )
+        # logger.exception records the active exception and traceback.
+        logger.exception("Failed to connect to the MQTT broker.")
         raise SystemExit(1) from error
 
-    logger.info("Configured zones: %s", zones)
-    logger.info("Configured sensors: %s", sensor_types)
-    logger.info("Number of samples per sensor: %d", number_of_samples)
-    logger.info("Generation interval (seconds): %s", generation_interval)
-    logger.info("Dispatch interval (seconds): %s", dispatch_interval)
-    logger.info("Created %d local sensor queues", len(sensor_queues))
-    time.sleep(1)  # Allow time for the MQTT client to connect
+    # Avoid logging raw values read from config.json.
+    logger.info("Simulator configuration validated.")
+    logger.info("Local sensor queues created.")
 
-    logger.info('MQTT client connected: %s', client.is_connected())
+    time.sleep(1)
+    logger.info("MQTT client connected: %s", client.is_connected())
 
-    # Track when the last MQTT dispatch occured.
     last_dispatch_time = time.monotonic()
 
-    # Generate telemetry and dispatch queued messages at separate intervals.
     try:
-        for sequence in range(1, number_of_samples + 1):
-            logger.info(
-                'Generating reading batch %d of %d',
-                sequence,
-                number_of_samples,
-            )
+        # The loop has a constant upper bound. The validated requested
+        # number controls when execution stops.
+        for sequence in range(1, MAX_READINGS_PER_SENSOR + 1):
+            if sequence > number_of_samples:
+                break
 
-            # Generate one reading for each sensor type in each zone and store it in the local queue.
+            logger.info("Generating sensor reading batch.")
+
             for zone_id in zones:
                 for sensor_type in sensor_types:
-                    device_id = f'{zone_id}-{sensor_type}-01'
+                    device_id = f"{zone_id}-{sensor_type}-01"
 
                     topic = build_sensor_topic(
                         config=config,
                         zone_id=zone_id,
-                        sensor_type=sensor_type
+                        sensor_type=sensor_type,
                     )
 
                     message = build_sensor_message(
@@ -217,21 +289,13 @@ def run_simulation(config: dict) -> None:
                     )
 
                     payload = json.dumps(message)
-
-                    # Store the message in the local queue for later dispatch.
                     sensor_queues[device_id].append((topic, payload))
 
-                    logger.info(
-                        "Queued message %s for device %s",
-                        sequence,
-                        device_id,
-                    )
+                    # Do not log sequence or device ID values derived
+                    # from the external configuration.
+                    logger.debug("Queued one sensor message.")
 
-            # Generation and MQTT dispatch use idenpendent timers.
-            logger.info(
-                "Waiting for %s seconds before the next generation cycle",
-                generation_interval,
-            )
+            logger.info("Waiting before the next generation cycle.")
             time.sleep(generation_interval)
 
             elapsed_since_dispatch = (
@@ -252,7 +316,6 @@ def run_simulation(config: dict) -> None:
 
                 last_dispatch_time = time.monotonic()
 
-        #Publish any messages remaining after the final generation cycle.
         remaining_count = dispatch_queued_messages(
             client=client,
             config=config,
@@ -268,16 +331,14 @@ def run_simulation(config: dict) -> None:
         logger.info("Simulation completed successfully.")
 
     except KeyboardInterrupt:
-        # Handle Ctrl+C gracefully without displaying a traceback.
         logger.info("Simulation interrupted by user.")
 
     finally:
-        # Always stop the MQTT network loop and disconnect the client.
         client.loop_stop()
         client.disconnect()
-
         logger.info("MQTT client disconnected safely.")
 
+
 if __name__ == "__main__":
-    configutation = load_config()
-    run_simulation(config=configutation)
+    configuration = load_config()
+    run_simulation(config=configuration)
