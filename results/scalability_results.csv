@@ -1,0 +1,4 @@
+run_id,zone_id,volume,repetition,sent,stored,failures,success_percent,send_seconds,total_seconds,send_throughput,effective_throughput,queue_remaining,dlq_increase,timed_out,started_at_utc,finished_at_utc
+aws-100-r1-20260724T163644Z-a37391,benchmark-aws-100-r1-20260724T163644Z-a37391,100,1,100,100,0,100.0,1.584,3.793,63.127,26.365,0,0,False,2026-07-24T16:36:44.659Z,2026-07-24T16:36:49.663Z
+aws-500-r1-20260724T163649Z-0b5a9f,benchmark-aws-500-r1-20260724T163649Z-0b5a9f,500,1,500,500,0,100.0,5.617,5.726,89.014,87.325,0,0,False,2026-07-24T16:36:49.663Z,2026-07-24T16:36:55.843Z
+aws-1000-r1-20260724T163655Z-53c254,benchmark-aws-1000-r1-20260724T163655Z-53c254,1000,1,1000,1000,0,100.0,12.633,15.157,79.159,65.975,0,0,False,2026-07-24T16:36:55.845Z,2026-07-24T16:37:11.569Z
