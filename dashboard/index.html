@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FloodGuard Edge monitoring dashboard">
+  <link rel="icon" href="data:,">
+  <title>FloodGuard Edge</title>
+
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>FloodGuard Edge</h1>
+      <p>Urban flood and drainage monitoring dashboard</p>
+    </div>
+
+    <div class="header-controls">
+      <p id="api-status">Checking API...</p>
+      <p>Last update: <span id="last-update">Not updated</span></p>
+      <button id="refresh-button" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="message" class="message" hidden></p>
+
+    <section>
+      <h2>Monitoring zones</h2>
+      <div id="zone-grid" class="zone-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <div>
+          <h2 id="selected-zone-title">Selected zone</h2>
+          <p id="selected-zone-time">Choose a zone to view its data.</p>
+        </div>
+        <span id="risk-badge" class="risk-badge risk-unknown">UNKNOWN</span>
+      </div>
+
+      <div id="no-data" class="card empty-state">
+        No zone data selected.
+      </div>
+
+      <div id="zone-details" hidden>
+        <div class="details-grid">
+          <article class="card">
+            <h3>Current risk</h3>
+            <p class="large-value" id="risk-score">—</p>
+            <p>Risk score</p>
+          </article>
+
+          <article class="card">
+            <h3>Reasons</h3>
+            <ul id="reasons-list"></ul>
+          </article>
+
+          <article class="card">
+            <h3>Recommended action</h3>
+            <p id="recommended-action">No recommendation available.</p>
+          </article>
+        </div>
+
+        <h3>Latest sensor readings</h3>
+
+        <div class="sensor-grid">
+          <article class="card sensor">
+            <span>Rainfall</span>
+            <strong id="rainfall">—</strong>
+            <small>mm/h</small>
+          </article>
+
+          <article class="card sensor">
+            <span>Water level</span>
+            <strong id="water-level">—</strong>
+            <small>cm</small>
+          </article>
+
+          <article class="card sensor">
+            <span>Flow rate</span>
+            <strong id="flow-rate">—</strong>
+            <small>L/s</small>
+          </article>
+
+          <article class="card sensor">
+            <span>Soil saturation</span>
+            <strong id="soil-saturation">—</strong>
+            <small>%</small>
+          </article>
+
+          <article class="card sensor">
+            <span>Drain blockage</span>
+            <strong id="drain-blockage">—</strong>
+            <small>%</small>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>History charts</h2>
+
+      <div class="charts-grid">
+        <article class="card chart-card">
+          <canvas id="risk-chart" aria-label="Risk score history chart"></canvas>
+        </article>
+
+        <article class="card chart-card">
+          <canvas id="rainfall-chart" aria-label="Rainfall history chart"></canvas>
+        </article>
+
+        <article class="card chart-card">
+          <canvas id="water-chart" aria-label="Water level history chart"></canvas>
+        </article>
+      </div>
+
+      <p id="history-empty" class="card empty-state">
+        Select a zone to load history.
+      </p>
+    </section>
+
+    <section>
+      <h2>Recent alerts</h2>
+      <div id="alerts-list" class="alerts-list">
+        <p class="card empty-state">Select a zone to load alerts.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Public AWS API only. No AWS credentials are stored in the browser.
+  </footer>
+</body>
+</html>
