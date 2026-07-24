@@ -109,6 +109,28 @@ class FakeMqttClient:
     on_connect = None
     on_message = None
 
+    def __init__(self) -> None:
+        self.subscriptions = []
+        self.connected_to = None
+        self.loop_started = False
+
+    def subscribe(self, topic, qos=0):
+        self.subscriptions.append((topic, qos))
+
+    def connect(self, host, port, keepalive):
+        self.connected_to = (host, port, keepalive)
+
+    def loop_forever(self):
+        self.loop_started = True
+
+
+class FakeMqttMessage:
+    """Minimal stand-in for an inbound paho MQTT message."""
+
+    def __init__(self, topic: str, payload: bytes) -> None:
+        self.topic = topic
+        self.payload = payload
+
 
 def test_reads_status_topic() -> None:
     zone_id, event_type = read_fog_topic(
@@ -199,3 +221,101 @@ def test_bridge_sends_event_to_sqs() -> None:
 
     assert message_id == "test-message-id"
     assert body["event_type"] == "status"
+
+
+def make_bridge() -> tuple[CloudBridge, FakeSqsClient, FakeMqttClient]:
+    """Create a CloudBridge wired to fake SQS and MQTT clients."""
+
+    fake_sqs = FakeSqsClient()
+    fake_mqtt = FakeMqttClient()
+
+    settings = BackendSettings(
+        aws_region="us-east-1",
+        sqs_queue_url=(
+            "https://example.com/floodguard-events"
+        ),
+        mqtt_status_topic="city/drainage/+/fog/status",
+        mqtt_alert_topic="city/drainage/+/fog/alert",
+        mqtt_qos=1,
+    )
+
+    bridge = CloudBridge(
+        settings,
+        sqs_client=fake_sqs,
+        mqtt_client=fake_mqtt,
+    )
+
+    return bridge, fake_sqs, fake_mqtt
+
+
+def test_on_connect_subscribes_on_success() -> None:
+    bridge, _, fake_mqtt = make_bridge()
+
+    bridge._on_connect(
+        fake_mqtt,
+        None,
+        {},
+        0,
+        None,
+    )
+
+    topics = [topic for topic, _ in fake_mqtt.subscriptions]
+
+    assert "city/drainage/+/fog/status" in topics
+    assert "city/drainage/+/fog/alert" in topics
+    assert all(qos == 1 for _, qos in fake_mqtt.subscriptions)
+
+
+def test_on_connect_does_not_subscribe_on_failure() -> None:
+    bridge, _, fake_mqtt = make_bridge()
+
+    bridge._on_connect(
+        fake_mqtt,
+        None,
+        {},
+        1,
+        None,
+    )
+
+    assert fake_mqtt.subscriptions == []
+
+
+def test_on_message_forwards_valid_message_to_sqs() -> None:
+    bridge, fake_sqs, fake_mqtt = make_bridge()
+
+    message = FakeMqttMessage(
+        STATUS_TOPIC,
+        make_status().model_dump_json().encode("utf-8"),
+    )
+
+    bridge._on_message(fake_mqtt, None, message)
+
+    assert len(fake_sqs.messages) == 1
+
+
+def test_on_message_ignores_invalid_message() -> None:
+    bridge, fake_sqs, fake_mqtt = make_bridge()
+
+    message = FakeMqttMessage(
+        "city/drainage/dublin-zone-01/invalid",
+        b"not valid json",
+    )
+
+    # Should not raise, and nothing should reach SQS.
+    bridge._on_message(fake_mqtt, None, message)
+
+    assert fake_sqs.messages == []
+
+
+def test_run_connects_and_starts_the_loop() -> None:
+    bridge, _, fake_mqtt = make_bridge()
+
+    bridge.run()
+
+    assert fake_mqtt.connected_to == (
+        "localhost",
+        1883,
+        60,
+    )
+    assert fake_mqtt.loop_started is True
+
