@@ -1,0 +1,74 @@
+{
+  "metadata": {
+    "generated_at_utc": "2026-07-24T16:37:11.573Z",
+    "region": "us-east-1",
+    "queue": "floodguard-events",
+    "table": "FloodGuardEvents",
+    "volumes": [
+      100,
+      500,
+      1000
+    ],
+    "repeat": 1,
+    "measured_path": "SQS -> ingestion Lambda -> DynamoDB"
+  },
+  "results": [
+    {
+      "run_id": "aws-100-r1-20260724T163644Z-a37391",
+      "zone_id": "benchmark-aws-100-r1-20260724T163644Z-a37391",
+      "volume": 100,
+      "repetition": 1,
+      "sent": 100,
+      "stored": 100,
+      "failures": 0,
+      "success_percent": 100.0,
+      "send_seconds": 1.584,
+      "total_seconds": 3.793,
+      "send_throughput": 63.127,
+      "effective_throughput": 26.365,
+      "queue_remaining": 0,
+      "dlq_increase": 0,
+      "timed_out": false,
+      "started_at_utc": "2026-07-24T16:36:44.659Z",
+      "finished_at_utc": "2026-07-24T16:36:49.663Z"
+    },
+    {
+      "run_id": "aws-500-r1-20260724T163649Z-0b5a9f",
+      "zone_id": "benchmark-aws-500-r1-20260724T163649Z-0b5a9f",
+      "volume": 500,
+      "repetition": 1,
+      "sent": 500,
+      "stored": 500,
+      "failures": 0,
+      "success_percent": 100.0,
+      "send_seconds": 5.617,
+      "total_seconds": 5.726,
+      "send_throughput": 89.014,
+      "effective_throughput": 87.325,
+      "queue_remaining": 0,
+      "dlq_increase": 0,
+      "timed_out": false,
+      "started_at_utc": "2026-07-24T16:36:49.663Z",
+      "finished_at_utc": "2026-07-24T16:36:55.843Z"
+    },
+    {
+      "run_id": "aws-1000-r1-20260724T163655Z-53c254",
+      "zone_id": "benchmark-aws-1000-r1-20260724T163655Z-53c254",
+      "volume": 1000,
+      "repetition": 1,
+      "sent": 1000,
+      "stored": 1000,
+      "failures": 0,
+      "success_percent": 100.0,
+      "send_seconds": 12.633,
+      "total_seconds": 15.157,
+      "send_throughput": 79.159,
+      "effective_throughput": 65.975,
+      "queue_remaining": 0,
+      "dlq_increase": 0,
+      "timed_out": false,
+      "started_at_utc": "2026-07-24T16:36:55.845Z",
+      "finished_at_utc": "2026-07-24T16:37:11.569Z"
+    }
+  ]
+}
