@@ -1,4 +1,4 @@
-"""Independent zone state and time-based sensor windows."""
+"""Maintain independent rolling sensor windows for every monitored zone."""
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -29,6 +29,7 @@ class SensorWindowStatistics:
 
 
 @dataclass(slots=True)
+# Time-bounded readings for one sensor type.
 class SensorWindow:
     """Maintain telemetry inside a fixed time-based rolling window."""
 
@@ -68,6 +69,7 @@ class SensorWindow:
     def add(self, telemetry: TelemetryMessage) -> None:
         """Add telemetry and remove readings outside the time window."""
 
+        # Sort by sensor time because messages can arrive slightly out of order.
         self._readings.append(telemetry)
         self._readings.sort(key=lambda reading: reading.timestamp)
 
@@ -76,6 +78,7 @@ class SensorWindow:
             seconds=self.window_seconds
         )
 
+        # Remove readings that fall outside the configured rolling window.
         self._readings = [
             reading
             for reading in self._readings
@@ -125,6 +128,7 @@ class SensorWindow:
 
 
 @dataclass(slots=True)
+# Complete local state for one geographic drainage zone.
 class ZoneState:
     """Maintain all local fog-processing state for one urban zone."""
 
@@ -180,6 +184,7 @@ class ZoneState:
         ):
             raise ValueError("Required sensor types contain unsupported values.")
 
+        # Keep a separate rolling window for every supported sensor type.
         self._windows = {
             sensor_type: SensorWindow(self.rolling_window_seconds)
             for sensor_type in _all_sensor_types()
@@ -200,6 +205,7 @@ class ZoneState:
                 f"Unsupported sensor type: {telemetry.sensor_type!r}"
             )
 
+        # Update only the window that matches this message.
         sensor_window.add(telemetry)
 
         latest_reading = sensor_window.latest

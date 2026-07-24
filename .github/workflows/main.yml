@@ -1,5 +1,6 @@
 ﻿name: FloodGuard CI/CD
 
+# Run quality checks for pull requests, main pushes, and manual executions.
 on:
   pull_request:
   push:
@@ -7,9 +8,11 @@ on:
   workflow_dispatch:
 
 permissions:
+  # The workflow only needs to read repository contents.
   contents: read
 
 env:
+# Shared values used by both jobs.
   PYTHON_VERSION: "3.13"
   AWS_REGION: "us-east-1"
   INGESTION_FUNCTION: "floodguard-ingestion"
@@ -17,6 +20,7 @@ env:
   API_BASE_URL: "https://igsjnvt205.execute-api.us-east-1.amazonaws.com"
 
 jobs:
+# This job must pass before a manual deployment can start.
   quality:
     name: Tests, Coverage and SonarCloud
     runs-on: ubuntu-latest
@@ -30,6 +34,7 @@ jobs:
       AWS_DEFAULT_REGION: "us-east-1"
 
     steps:
+    # Full history improves SonarCloud branch and change analysis.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -46,6 +51,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Coverage XML is consumed by SonarCloud in the next step.
       - name: Run automated tests with coverage
         run: |
           python -m pytest tests/ \
@@ -56,6 +62,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml
 
+      # Upload source analysis and test coverage to the SonarCloud project.
       - name: SonarCloud scan
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8
         env:
@@ -69,6 +76,7 @@ jobs:
             -Dsonar.python.coverage.reportPaths=coverage.xml
             -Dsonar.coverage.exclusions=tests/**,dashboard/**
 
+      # Fail the workflow when the configured quality gate is not approved.
       - name: SonarCloud quality gate
         uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
         timeout-minutes: 10
@@ -77,6 +85,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+  # Deployment is separate because AWS Academy credentials expire.
   deploy:
     name: AWS deployment
     runs-on: ubuntu-latest
@@ -100,6 +109,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Credentials come from GitHub Secrets and are never stored in the repository.
       - name: Configure AWS Academy credentials
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
         with:
@@ -111,6 +121,7 @@ jobs:
       - name: Confirm AWS identity
         run: aws sts get-caller-identity
 
+      # Build small ZIP archives containing the latest Lambda source files.
       - name: Package Lambda functions
         run: python infrastructure/package_lambdas.py
 
@@ -136,6 +147,7 @@ jobs:
             --function-name "${QUERY_FUNCTION}" \
             --region "${AWS_REGION}"
 
+      #  --delete keeps the bucket contents identical to the dashboard folder.
       - name: Deploy dashboard to S3
         run: |
           aws s3 sync dashboard/ \
@@ -143,6 +155,7 @@ jobs:
           --delete \
           --region "${AWS_REGION}"
 
+      # A failed health request prevents a misleading successful deployment result.
       - name: Verify public API
         run: |
           curl --fail \

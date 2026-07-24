@@ -1,7 +1,11 @@
 "use strict";
 
+// Browser-only dashboard: reads the public API and updates the page safely.
+
+// Runtime values are kept in config.js so deployment URLs are easy to change.
 const CONFIG = window.FLOODGUARD_CONFIG;
 
+// These zones match the simulator and query Lambda configuration.
 const ZONES = [
   "dublin-zone-01",
   "dublin-zone-02",
@@ -9,6 +13,7 @@ const ZONES = [
   "dublin-zone-04"
 ];
 
+// Numeric order makes risk levels easy to compare and sort.
 const RISK_ORDER = {
   UNKNOWN: 0,
   INITIALISING: 1,
@@ -19,6 +24,7 @@ const RISK_ORDER = {
   CRITICAL: 6
 };
 
+// Mutable page state is kept in one object to avoid scattered global variables.
 const state = {
   selectedZone: ZONES[0],
   latestByZone: new Map(),
@@ -27,6 +33,7 @@ const state = {
   refreshing: false
 };
 
+// Cache DOM references once instead of searching the page on every refresh.
 const el = {
   apiStatus: document.getElementById("api-status"),
   lastUpdate: document.getElementById("last-update"),
@@ -58,7 +65,9 @@ const el = {
   alertsList: document.getElementById("alerts-list")
 };
 
+// Fetch one API route with timeout, JSON validation, and friendly errors.
 async function fetchJson(path) {
+  // AbortController stops a request that exceeds the configured timeout.
   const controller = new AbortController();
 
   const timeoutId = setTimeout(
@@ -108,30 +117,34 @@ async function fetchJson(path) {
   }
 }
 
+// Return a safe payload object even when an API record is missing.
 function payload(record) {
   return record && typeof record.payload === "object"
     ? record.payload
     : {};
 }
 
+// Accept only known risk labels before using a value in CSS class names.
 function risk(value) {
   const level = String(value || "UNKNOWN").toUpperCase();
   return Object.hasOwn(RISK_ORDER, level) ? level : "UNKNOWN";
 }
 
+// Format sensor values consistently and show an em dash for missing data.
 function number(value) {
   if (value === null || value === undefined) {
-    return "—";
+    return "â€”";
   }
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(2) : "—";
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : "â€”";
 }
 
+// Display timestamps using Irish date and time conventions.
 function dateTime(value) {
   const date = new Date(value);
 
   if (!value || Number.isNaN(date.getTime())) {
-    return "—";
+    return "â€”";
   }
 
   return new Intl.DateTimeFormat("en-IE", {
@@ -140,6 +153,7 @@ function dateTime(value) {
   }).format(date);
 }
 
+// API records can contain time in the payload or in stored metadata.
 function recordTime(record, payloadField) {
   return payload(record)[payloadField]
     || record?.event_time
@@ -147,12 +161,14 @@ function recordTime(record, payloadField) {
     || null;
 }
 
+// Remove existing children before re-rendering a dynamic section.
 function clear(element) {
   while (element.firstChild) {
     element.removeChild(element.firstChild);
   }
 }
 
+// Create text-only DOM nodes; textContent avoids injecting HTML from API data.
 function make(tag, text, className = "") {
   const element = document.createElement(tag);
   element.textContent = text;
@@ -164,6 +180,7 @@ function make(tag, text, className = "") {
   return element;
 }
 
+// Apply both the text and matching colour class for one risk badge.
 function setBadge(element, level) {
   const safeRisk = risk(level);
   element.className = `risk-badge risk-${safeRisk.toLowerCase()}`;
@@ -179,11 +196,13 @@ function hideMessage() {
   el.message.hidden = true;
 }
 
+// Load every zone in parallel so one failed zone does not block the others.
 async function loadLatestStatuses() {
   const requests = ZONES.map((zone) =>
     fetchJson(`/zones/${encodeURIComponent(zone)}/latest`)
   );
 
+  // allSettled preserves successful results when some requests fail.
   const results = await Promise.allSettled(requests);
 
   state.latestByZone.clear();
@@ -200,6 +219,7 @@ async function loadLatestStatuses() {
   });
 }
 
+// Convert request state into a short message for the zone card.
 function zoneAvailability(zone) {
   if (state.latestByZone.has(zone)) {
     return "Data available";
@@ -212,6 +232,7 @@ function zoneAvailability(zone) {
   return "Temporarily unavailable";
 }
 
+// Build the selectable overview card for each monitored zone.
 function renderZones() {
   clear(el.zoneGrid);
 
@@ -240,7 +261,7 @@ function renderZones() {
     card.appendChild(
       make(
         "p",
-        `Risk score: ${record ? number(data.risk_score) : "—"}`
+        `Risk score: ${record ? number(data.risk_score) : "â€”"}`
       )
     );
 
@@ -268,6 +289,7 @@ function renderZones() {
   });
 }
 
+// Show the human-readable reasons returned by the fog risk engine.
 function renderReasons(reasons) {
   clear(el.reasonsList);
 
@@ -285,6 +307,7 @@ function renderReasons(reasons) {
   });
 }
 
+// Fill the current-risk and latest-sensor section for the selected zone.
 function renderCurrentZone() {
   const record = state.latestByZone.get(state.selectedZone);
 
@@ -324,11 +347,13 @@ function renderCurrentZone() {
   el.drainBlockage.textContent = number(sensors.drain_blockage);
 }
 
+// Chart.js instances must be destroyed before the same canvas is reused.
 function destroyCharts() {
   state.charts.forEach((chart) => chart.destroy());
   state.charts = [];
 }
 
+// Create one small line chart with the common dashboard options.
 function createLineChart(canvas, title, labels, values, yLabel) {
   return new window.Chart(canvas, {
     type: "line",
@@ -372,6 +397,7 @@ function createLineChart(canvas, title, labels, values, yLabel) {
   });
 }
 
+// Convert recent status records into chronologically ordered chart series.
 function renderHistory(items) {
   destroyCharts();
 
@@ -445,6 +471,7 @@ function renderHistory(items) {
   );
 }
 
+// Render newest alerts first and highlight HIGH/CRITICAL records.
 function renderAlerts(items) {
   clear(el.alertsList);
 
@@ -481,7 +508,7 @@ function renderAlerts(items) {
     }
 
     card.appendChild(
-      make("h3", `${severity} — ${number(data.risk_score)}`)
+      make("h3", `${severity} â€” ${number(data.risk_score)}`)
     );
 
     card.appendChild(
@@ -507,6 +534,7 @@ function renderAlerts(items) {
     || "No recommendation available.";
 }
 
+// Fetch history and alerts together for the selected zone.
 async function loadSelectedZoneData(zone) {
   const encoded = encodeURIComponent(zone);
 
@@ -515,6 +543,7 @@ async function loadSelectedZoneData(zone) {
     fetchJson(`/zones/${encoded}/alerts?limit=20`)
   ]);
 
+  // Ignore a slow response if the user selected another zone meanwhile.
   if (state.selectedZone !== zone) {
     return;
   }
@@ -532,6 +561,7 @@ async function loadSelectedZoneData(zone) {
   }
 }
 
+// Update selection immediately, then load the zone-specific data.
 function selectZone(zone) {
   state.selectedZone = zone;
   renderZones();
@@ -542,7 +572,9 @@ function selectZone(zone) {
   });
 }
 
+// Run one complete health, latest-status, history, and alert refresh.
 async function refreshDashboard() {
+  // Prevent overlapping refreshes from the timer and refresh button.
   if (state.refreshing) {
     return;
   }
@@ -590,8 +622,10 @@ async function refreshDashboard() {
   }
 }
 
+// Manual refresh uses the same safe workflow as automatic refresh.
 el.refreshButton.addEventListener("click", refreshDashboard);
 
+// Load immediately, then repeat at the configured interval.
 refreshDashboard().finally(() => {
   setInterval(refreshDashboard, CONFIG.REFRESH_INTERVAL_MS);
 });

@@ -1,4 +1,9 @@
-"""Deterministic rule-based flood-risk calculations."""
+"""Calculate a transparent, deterministic flood-risk score at the fog layer.
+
+The method combines normalised sensor values with configured weights, then
+applies safety overrides for dangerous combinations that should not be hidden by
+an average score. It is a project heuristic, not a hydraulic prediction model.
+"""
 
 from dataclasses import dataclass
 from typing import Literal, Mapping
@@ -9,6 +14,7 @@ from fog_app.config.settings import (
 )
 
 
+# Ordered labels used throughout status, alert, and policy code.
 RiskLevel = Literal[
     "NORMAL",
     "WATCH",
@@ -85,6 +91,7 @@ def _clamp(
     return min(max(value, minimum), maximum)
 
 
+# Convert different units into comparable 0-100 component scores.
 def normalise_risk_value(
     value: float,
     critical_value: float,
@@ -115,6 +122,7 @@ def calculate_drainage_metrics(
     if flow_rate_l_s < 0:
         raise ValueError("Flow rate cannot be negative.")
 
+    # Bound percentages so bad input cannot create impossible derived values.
     bounded_blockage = _clamp(
         drain_blockage_percent,
         0.0,
@@ -127,12 +135,15 @@ def calculate_drainage_metrics(
         1.0,
     )
 
+    # High flow means the drain is close to its designed capacity.
     capacity_pressure_score = flow_utilisation * 100.0
 
+    # Low flow can still be dangerous when a severe blockage prevents drainage.
     blocked_underperformance_score = (
         bounded_blockage * (1.0 - flow_utilisation)
     )
 
+    # Use the stronger of capacity pressure and blocked underperformance.
     drainage_stress_score = _clamp(
         max(
             capacity_pressure_score,
@@ -160,6 +171,7 @@ def classify_risk_score(
 
     bounded_score = _clamp(risk_score)
 
+    # Check from the most severe level downward.
     if bounded_score >= thresholds.critical_min:
         return "CRITICAL"
 
@@ -206,6 +218,7 @@ def calculate_flood_risk(
 ) -> RiskAssessment:
     """Calculate a deterministic flood-risk assessment."""
 
+    # 1. Derive drainage pressure from flow and blockage.
     drainage_metrics = calculate_drainage_metrics(
         flow_rate_l_s=inputs.flow_rate_l_s,
         drain_blockage_percent=inputs.drain_blockage_percent,
@@ -214,6 +227,7 @@ def calculate_flood_risk(
 
     normalisation = settings.normalisation
 
+    # 2. Put every input on the same 0-100 risk scale.
     component_scores = {
         "water_level": normalise_risk_value(
             inputs.water_level_cm,
@@ -243,6 +257,7 @@ def calculate_flood_risk(
 
     weights = settings.weights
 
+    # 3. Weighted sum expresses the configured importance of each component.
     weighted_score = (
         component_scores["water_level"] * weights.water_level
         + component_scores["rainfall"] * weights.rainfall
@@ -258,6 +273,7 @@ def calculate_flood_risk(
 
     bounded_score = _clamp(weighted_score)
 
+    # 4. Translate the numeric score into an operational risk label.
     risk_level = classify_risk_score(
         bounded_score,
         settings.level_thresholds,
@@ -266,6 +282,7 @@ def calculate_flood_risk(
     reasons: list[str] = []
     overrides = settings.overrides
 
+    # 5. Safety overrides may only increase severity, never reduce it.
     def apply_override(
         minimum_level: RiskLevel,
         reason: str,
@@ -280,6 +297,7 @@ def calculate_flood_risk(
         )
         _add_reason(reasons, reason)
 
+    # Direct critical water level is sufficient for immediate escalation.
     if inputs.water_level_cm >= overrides.water_level_critical_cm:
         apply_override(
             "CRITICAL",
@@ -328,6 +346,7 @@ def calculate_flood_risk(
             "Heavy rainfall combined with severe drain blockage.",
         )
 
+    # 6. Add plain-language reasons for the dashboard and operators.
     if component_scores["water_level"] >= 50.0:
         _add_reason(
             reasons,
@@ -383,6 +402,7 @@ def calculate_flood_risk(
                 "Combined sensor conditions produced an elevated flood-risk score."
             )
 
+    # Round only the published result; calculations above use full precision.
     rounded_components = {
         name: round(score, 2)
         for name, score in component_scores.items()

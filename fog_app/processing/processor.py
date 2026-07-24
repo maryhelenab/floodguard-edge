@@ -1,4 +1,9 @@
-"""Central broker-independent processing pipeline for fog telemetry."""
+"""Run the complete local fog-processing pipeline for one MQTT message.
+
+This class is intentionally independent of the MQTT client. That separation makes
+the validation, rolling state, risk logic, output policy, and persistence easy to
+test without a live broker.
+"""
 
 import json
 import logging
@@ -49,6 +54,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
+# Lightweight operational metrics useful for logs, tests, and monitoring.
 class FogRuntimeCounters:
     """Runtime processing counters."""
 
@@ -67,6 +73,7 @@ class FogRuntimeCounters:
 
 
 @dataclass(frozen=True, slots=True)
+# A single return object clearly describes acceptance and optional outputs.
 class ProcessingResult:
     """Outcome of processing one MQTT telemetry message."""
 
@@ -86,10 +93,13 @@ class FogProcessor:
         *,
         event_store: FogEventStore | None = None,
     ) -> None:
+        """Create per-zone state and the validation helpers used at runtime."""
+
         self.config = config
         self.event_store = event_store
         self.counters = FogRuntimeCounters()
 
+        # These helpers protect the pipeline from MQTT redelivery and old data.
         self.deduplicator = EventIdDeduplicator(
             config.processing.deduplication_cache_size
         )
@@ -99,6 +109,7 @@ class FogProcessor:
             config.processing.required_sensor_types
         )
 
+        # Every configured zone has isolated rolling windows and risk state.
         self.zone_states = {
             zone_id: ZoneState(
                 zone_id=zone_id,
@@ -110,6 +121,7 @@ class FogProcessor:
             for zone_id in config.zones
         }
 
+        # Keep only the most recent source IDs to explain each fog status.
         self.source_event_ids = {
             zone_id: deque(
                 maxlen=config.processing.source_event_id_limit
@@ -128,13 +140,17 @@ class FogProcessor:
         """Process one raw MQTT message."""
 
         self.counters.received += 1
+
+        # Use UTC consistently so sensor age and publication intervals are comparable.
         current_time = now or datetime.now(timezone.utc)
 
+        # 1. Validate the MQTT topic structure before reading its payload.
         try:
             parsed_topic = parse_telemetry_topic(topic)
         except InvalidTelemetryTopicError as error:
             return self._reject("topic_failures", "invalid_topic", str(error))
 
+        # 2. Decode bytes and parse the raw JSON document.
         try:
             payload_text = (
                 payload.decode("utf-8")
@@ -149,6 +165,7 @@ class FogProcessor:
                 f"Malformed JSON: {error}",
             )
 
+        # 3. Validate required fields, ranges, sensor type, UUID, and timestamp.
         try:
             telemetry = TelemetryMessage.model_validate(raw_payload)
         except ValidationError as error:
@@ -158,6 +175,7 @@ class FogProcessor:
                 f"Invalid telemetry payload: {error}",
             )
 
+        # 4. Ensure the topic cannot disagree with the payload identity.
         try:
             validate_topic_matches_payload(parsed_topic, telemetry)
         except TelemetryTopicMismatchError as error:
@@ -167,6 +185,7 @@ class FogProcessor:
                 str(error),
             )
 
+        # 5. Reject zones that this fog node is not configured to manage.
         zone_state = self.zone_states.get(telemetry.zone_id)
 
         if zone_state is None:
@@ -176,6 +195,7 @@ class FogProcessor:
                 f"Unconfigured zone: {telemetry.zone_id!r}",
             )
 
+        # 6. Optional freshness check prevents delayed data changing current risk.
         if self.config.processing.stale_message_validation_enabled:
             try:
                 stale = is_stale_message(
@@ -197,6 +217,7 @@ class FogProcessor:
                     f"Stale event: {telemetry.event_id}",
                 )
 
+        # 7. MQTT QoS 1 can redeliver a message, so event IDs are deduplicated.
         if self.deduplicator.check_and_record(telemetry.event_id):
             return self._reject(
                 "duplicates",
@@ -204,6 +225,7 @@ class FogProcessor:
                 f"Duplicate event: {telemetry.event_id}",
             )
 
+        # 8. Sequence validation rejects an older device reading after a newer one.
         if (
             self.config.processing.reject_out_of_order
             and self.sequence_tracker.check_and_record(
@@ -220,17 +242,20 @@ class FogProcessor:
                 ),
             )
 
+        # Save the previous level before updating state; policies compare both levels.
         previous_level = cast(
             StatusRiskLevel,
             zone_state.current_risk_level,
         )
 
+        # 9. The message is now accepted and can update the local rolling window.
         zone_state.add_telemetry(telemetry)
         self.source_event_ids[telemetry.zone_id].append(
             telemetry.event_id
         )
         self.counters.accepted += 1
 
+        # 10. Recalculate the zone risk using the latest complete local state.
         (
             current_level,
             risk_score,
@@ -247,6 +272,7 @@ class FogProcessor:
         status = None
         alert = None
 
+        # 11. Publish a status on important changes or at the configured interval.
         if should_publish_status(
             previous_level=previous_level,
             current_level=current_level,
@@ -283,12 +309,14 @@ class FogProcessor:
             zone_state.last_status_publication_time = current_time
             self.counters.statuses_created += 1
 
+            # Persistence is best-effort: a database error must not stop monitoring.
             if (
                 self.event_store is not None
                 and not self.event_store.persist_status(status)
             ):
                 self.counters.database_failures += 1
 
+        # 12. Alerts are created only when a status exists and policy allows it.
         if (
             status is not None
             and should_publish_alert(
@@ -331,6 +359,7 @@ class FogProcessor:
             ):
                 self.counters.database_failures += 1
 
+        # Store the result for the next message and publication-policy comparison.
         zone_state.previous_risk_level = previous_level
         zone_state.current_risk_level = current_level
         zone_state.current_risk_score = risk_score
@@ -354,6 +383,7 @@ class FogProcessor:
     ]:
         """Calculate warm-up or completed risk output."""
 
+        # A zone stays INITIALISING until every required sensor has reported.
         missing_sensors = list(zone_state.missing_sensor_types())
 
         water_rise = zone_state.water_level_rate_of_rise(
@@ -363,6 +393,7 @@ class FogProcessor:
         flow_rate = self._latest(zone_state, "flow_rate") or 0.0
         blockage = self._latest(zone_state, "drain_blockage") or 0.0
 
+        # Derived drainage pressure can be calculated even during warm-up.
         drainage = calculate_drainage_metrics(
             flow_rate_l_s=flow_rate,
             drain_blockage_percent=blockage,
@@ -392,6 +423,7 @@ class FogProcessor:
                 derived,
             )
 
+        # Once complete, use the deterministic weighted risk engine.
         assessment = calculate_flood_risk(
             RiskInputs(
                 rainfall_mm_h=self._required(zone_state, "rainfall"),
@@ -439,6 +471,8 @@ class FogProcessor:
         zone_state: ZoneState,
         sensor_type: SensorType,
     ) -> float | None:
+        """Return the latest value for a sensor, or ``None`` if unavailable."""
+
         telemetry = zone_state.latest_readings.get(sensor_type)
         return None if telemetry is None else telemetry.value
 
@@ -447,6 +481,8 @@ class FogProcessor:
         zone_state: ZoneState,
         sensor_type: SensorType,
     ) -> float:
+        """Return a required value after warm-up or raise an internal error."""
+
         value = self._latest(zone_state, sensor_type)
 
         if value is None:
@@ -455,6 +491,8 @@ class FogProcessor:
         return value
 
     def _snapshot(self, zone_state: ZoneState) -> SensorSnapshot:
+        """Build the latest raw sensor snapshot for a status message."""
+
         return SensorSnapshot(
             rainfall=self._latest(zone_state, "rainfall"),
             water_level=self._latest(zone_state, "water_level"),
@@ -471,6 +509,8 @@ class FogProcessor:
 
     @staticmethod
     def _sample_counts(zone_state: ZoneState) -> SampleCounts:
+        """Report how many samples support each rolling-window calculation."""
+
         return SampleCounts(
             rainfall=len(zone_state.window_for("rainfall")),
             water_level=len(zone_state.window_for("water_level")),
@@ -485,6 +525,8 @@ class FogProcessor:
 
     @staticmethod
     def _recommended_action(severity: AlertSeverity) -> str:
+        """Map each alert severity to a simple operational response."""
+
         actions = {
             "WARNING": "Inspect the drainage zone and monitor conditions.",
             "HIGH": "Dispatch an inspection team and prepare emergency response.",
@@ -499,6 +541,8 @@ class FogProcessor:
         reason: str,
         message: str,
     ) -> ProcessingResult:
+        """Increment a rejection counter, log the reason, and return failure."""
+
         current_value = getattr(self.counters, counter_name)
         setattr(self.counters, counter_name, current_value + 1)
 

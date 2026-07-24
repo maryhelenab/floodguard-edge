@@ -1,8 +1,10 @@
-"""Bounded event-ID deduplication for MQTT telemetry messages."""
+"""Detect duplicate telemetry IDs with a bounded in-memory cache."""
 
 from collections import OrderedDict
 from uuid import UUID
 
+
+# OrderedDict provides fast lookup and remembers insertion order for eviction.
 class EventIdDeduplicator:
     """Deduplicate telemetry messages based on their event IDs.
 
@@ -33,11 +35,13 @@ class EventIdDeduplicator:
             False when the event ID is new and has now been recorded.
         """
 
+        # True means MQTT delivered an event that was already processed.
         if event_id in self._event_ids:
             return True
 
         self._event_ids[event_id] = None
 
+        # Remove the oldest ID so memory use stays bounded.
         if len(self._event_ids) > self.max_size:
             self._event_ids.popitem(last=False)
 

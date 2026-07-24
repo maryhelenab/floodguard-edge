@@ -1,4 +1,4 @@
-"""Deterministic status and alert publication policies."""
+"""Throttle routine statuses while publishing important changes quickly."""
 
 from datetime import datetime, timezone
 from typing import cast
@@ -49,6 +49,7 @@ def _elapsed_seconds(
     return (now_utc - previous_utc).total_seconds()
 
 
+# Publishing every reading would waste bandwidth, so statuses are periodic.
 def should_publish_status(
     *,
     previous_level: StatusRiskLevel | None,
@@ -86,6 +87,7 @@ def should_publish_status(
     return elapsed_seconds >= interval_seconds
 
 
+# Alerts are emitted only for serious levels and meaningful changes.
 def should_publish_alert(
     *,
     previous_level: StatusRiskLevel | None,

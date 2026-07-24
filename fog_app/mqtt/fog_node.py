@@ -1,4 +1,8 @@
-"""MQTT adapter for the FloodGuard fog-processing pipeline."""
+"""Connect MQTT transport to the broker-independent fog processor.
+
+The processor contains the business rules. This module receives telemetry,
+passes it to the processor, and publishes any generated status or alert.
+"""
 
 import logging
 
@@ -12,6 +16,7 @@ from fog_app.processing.processor import FogProcessor
 LOGGER = logging.getLogger(__name__)
 
 
+# Network adapter around the testable FogProcessor class.
 class FogMqttNode:
     """Receive raw telemetry and publish processed status and alerts."""
 
@@ -45,6 +50,7 @@ class FogMqttNode:
             ),
         )
 
+        # Register callbacks before connecting to the broker.
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
@@ -69,6 +75,7 @@ class FogMqttNode:
         topic = self.config.mqtt.telemetry_subscription_topic
         qos = self.config.mqtt.qos
 
+        # One wildcard subscription receives every configured sensor device.
         client.subscribe(topic, qos=qos)
 
         LOGGER.info(
@@ -103,6 +110,7 @@ class FogMqttNode:
     ) -> None:
         """Process one incoming MQTT telemetry message."""
 
+        # All validation and risk logic is delegated to the processor.
         result = self.processor.process_message(
             message.topic,
             message.payload,
@@ -116,6 +124,7 @@ class FogMqttNode:
             )
             return
 
+        # Publish only outputs created by the publication policy.
         if result.status is not None:
             status_topic = (
                 self.config.mqtt.status_topic_template.format(
@@ -151,6 +160,7 @@ class FogMqttNode:
     ) -> None:
         """Publish one processed fog output."""
 
+        # QoS 1 asks the broker to acknowledge delivery at least once.
         publish_result = client.publish(
             topic,
             payload=payload,
@@ -183,6 +193,7 @@ class FogMqttNode:
             self.config.mqtt.port,
             self.config.mqtt.keepalive,
         )
+        # Keep the process alive so MQTT callbacks continue to run.
         self.client.loop_forever()
 
 

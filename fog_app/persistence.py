@@ -1,4 +1,8 @@
-"""Minimal SQLite persistence for fog statuses and alerts."""
+"""Persist fog status and alert outputs in a small local SQLite database.
+
+Local storage preserves decisions when the cloud connection is unavailable.
+A database error is logged and returned as ``False`` so monitoring continues.
+"""
 
 import logging
 import sqlite3
@@ -10,22 +14,27 @@ from fog_app.models import FogAlert, FogStatus
 LOGGER = logging.getLogger(__name__)
 
 
+# Repository class that hides SQL details from the processor.
 class FogEventStore:
     """Store complete fog-node outputs in a local SQLite database."""
 
     def __init__(self, database_path: str | Path) -> None:
+        """Prepare the database path and create the required tables."""
+
         self.database_path = Path(database_path)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._create_tables()
 
     def _connect(self) -> sqlite3.Connection:
-        """Open a SQLite connection."""
+        """Open a short-lived SQLite connection."""
 
+        # Short-lived connections keep this small repository simple.
         return sqlite3.connect(self.database_path)
 
     def _create_tables(self) -> None:
         """Create the required tables when they do not exist."""
 
+        # Statuses and alerts are separated because they have different fields.
         schema = """
         CREATE TABLE IF NOT EXISTS processed_statuses (
             event_id TEXT PRIMARY KEY,
@@ -46,6 +55,7 @@ class FogEventStore:
         );
         """
 
+        # IF NOT EXISTS makes startup safe for new and existing databases.
         with self._connect() as connection:
             connection.executescript(schema)
 
@@ -53,6 +63,7 @@ class FogEventStore:
         """Persist one processed status without crashing the fog node."""
 
         try:
+            # Keep searchable columns plus the complete serialised output.
             with self._connect() as connection:
                 connection.execute(
                     """
@@ -89,6 +100,7 @@ class FogEventStore:
         """Persist one alert without crashing the fog node."""
 
         try:
+            # The alert ID is the primary key, preventing accidental duplicates.
             with self._connect() as connection:
                 connection.execute(
                     """
@@ -122,7 +134,7 @@ class FogEventStore:
             return False
 
     def count_statuses(self) -> int:
-        """Return the number of stored statuses."""
+        """Return the number of stored status rows."""
 
         with self._connect() as connection:
             result = connection.execute(
@@ -132,7 +144,7 @@ class FogEventStore:
         return int(result[0])
 
     def count_alerts(self) -> int:
-        """Return the number of stored alerts."""
+        """Return the number of stored alert rows."""
 
         with self._connect() as connection:
             result = connection.execute(
