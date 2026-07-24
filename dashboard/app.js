@@ -508,7 +508,7 @@ function renderAlerts(items) {
     }
 
     card.appendChild(
-      make("h3", `${severity} â€” ${number(data.risk_score)}`)
+      make("h3", `${severity} \u2014 ${number(data.risk_score)}`)
     );
 
     card.appendChild(
