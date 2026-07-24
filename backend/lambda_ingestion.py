@@ -6,7 +6,16 @@ import os
 from datetime import datetime
 
 import boto3
+from botocore.config import Config
 
+DYNAMODB_CONFIG = Config(
+    connect_timeout=1,
+    read_timeout=2,
+    retries={
+        "total_max_attempts": 2,
+        "mode": "standard",
+    },
+)
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
@@ -16,7 +25,7 @@ TABLE_NAME = os.environ.get(
     "FloodGuardEvents",
 )
 
-dynamodb = boto3.resource("dynamodb")
+dynamodb = boto3.resource("dynamodb", config=DYNAMODB_CONFIG)
 table = dynamodb.Table(TABLE_NAME)
 
 
