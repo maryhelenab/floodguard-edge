@@ -24,7 +24,7 @@
 
     <div class="header-controls">
       <p id="api-status">Checking API...</p>
-      <p>Last update: <span id="last-update">Not updated</span></p>
+      <p>Dashboard refreshed: <span id="last-update">Not updated</span></p>
       <button id="refresh-button" type="button">Refresh</button>
     </div>
   </header>
@@ -44,6 +44,7 @@
         <div>
           <h2 id="selected-zone-title">Selected zone</h2>
           <p id="selected-zone-time">Choose a zone to view its data.</p>
+          <p>Based on the latest fog status received</p>
         </div>
         <span id="risk-badge" class="risk-badge risk-unknown">UNKNOWN</span>
       </div>
@@ -55,7 +56,7 @@
       <div id="zone-details" hidden>
         <div class="details-grid">
           <article class="card">
-            <h3>Current risk</h3>
+            <h3>Latest assessed risk</h3>
             <p class="large-value" id="risk-score">â€”</p>
             <p>Risk score</p>
           </article>
