@@ -133,10 +133,10 @@ function risk(value) {
 // Format sensor values consistently and show an em dash for missing data.
 function number(value) {
   if (value === null || value === undefined) {
-    return "â€”";
+    return "—";
   }
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toFixed(2) : "â€”";
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : "—";
 }
 
 // Display timestamps using Irish date and time conventions.
@@ -144,13 +144,71 @@ function dateTime(value) {
   const date = new Date(value);
 
   if (!value || Number.isNaN(date.getTime())) {
-    return "â€”";
+    return "—";
   }
 
   return new Intl.DateTimeFormat("en-IE", {
-    dateStyle: "medium",
-    timeStyle: "medium"
+    timeZone: "Europe/Dublin",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
   }).format(date);
+}
+
+// Use a compact date and time label on chart axes.
+function chartDateTime(value) {
+  const date = new Date(value);
+
+  if (!value || Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-IE", {
+    timeZone: "Europe/Dublin",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
+// Explain how old the latest stored event is.
+function eventAge(value) {
+  const eventTime = new Date(value).getTime();
+
+  if (!value || Number.isNaN(eventTime)) {
+    return "";
+  }
+
+  const differenceMs = Date.now() - eventTime;
+
+  if (differenceMs < 0) {
+    return "event time is ahead of the dashboard clock";
+  }
+
+  const minutes = Math.floor(differenceMs / 60000);
+
+  if (minutes < 1) {
+    return "just now";
+  }
+
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 // API records can contain time in the payload or in stored metadata.
@@ -261,7 +319,7 @@ function renderZones() {
     card.appendChild(
       make(
         "p",
-        `Risk score: ${record ? number(data.risk_score) : "â€”"}`
+        `Risk score: ${record ? number(data.risk_score) : "—"}`
       )
     );
 
@@ -332,8 +390,12 @@ function renderCurrentZone() {
   el.noData.hidden = true;
   el.zoneDetails.hidden = false;
 
+  const latestEventTime = recordTime(record, "computed_at");
+  const latestEventAge = eventAge(latestEventTime);
+
   el.selectedZoneTime.textContent =
-    `Latest event: ${dateTime(recordTime(record, "computed_at"))}`;
+    `Latest data received: ${dateTime(latestEventTime)}` +
+    (latestEventAge ? ` (${latestEventAge})` : "");
 
   setBadge(el.riskBadge, data.risk_level);
 
@@ -354,7 +416,15 @@ function destroyCharts() {
 }
 
 // Create one small line chart with the common dashboard options.
-function createLineChart(canvas, title, labels, values, yLabel) {
+function createLineChart(
+  canvas,
+  title,
+  labels,
+  values,
+  yLabel,
+  timestamps,
+  historySummary
+) {
   return new window.Chart(canvas, {
     type: "line",
     data: {
@@ -376,13 +446,28 @@ function createLineChart(canvas, title, labels, values, yLabel) {
         title: {
           display: true,
           text: title
+        },
+        subtitle: {
+          display: true,
+          text: historySummary,
+          padding: {
+            bottom: 12
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title(tooltipItems) {
+              const index = tooltipItems[0]?.dataIndex;
+              return dateTime(timestamps[index]);
+            }
+          }
         }
       },
       scales: {
         x: {
           title: {
             display: true,
-            text: "Event time"
+            text: "Recorded event date and time"
           }
         },
         y: {
@@ -420,13 +505,19 @@ function renderHistory(items) {
 
   el.historyEmpty.hidden = true;
 
-  const labels = rows.map((item) => {
-    return new Intl.DateTimeFormat("en-IE", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    }).format(new Date(recordTime(item, "computed_at")));
-  });
+  const timestamps = rows.map(
+    (item) => recordTime(item, "computed_at")
+  );
+
+  const labels = timestamps.map(chartDateTime);
+
+  const firstTimestamp = timestamps[0];
+  const lastTimestamp = timestamps[timestamps.length - 1];
+
+  const historySummary = [
+    `Latest ${rows.length} recorded status event${rows.length === 1 ? "" : "s"} (not a fixed hourly window)`,
+    `${dateTime(firstTimestamp)} — ${dateTime(lastTimestamp)}`
+  ];
 
   const riskScores = rows.map(
     (item) => Number(payload(item).risk_score)
@@ -446,7 +537,9 @@ function renderHistory(items) {
       "Risk score history",
       labels,
       riskScores,
-      "Risk score"
+      "Risk score",
+      timestamps,
+      historySummary
     )
   );
 
@@ -456,7 +549,9 @@ function renderHistory(items) {
       "Rainfall history",
       labels,
       rainfallValues,
-      "Rainfall (mm/h)"
+      "Rainfall (mm/h)",
+      timestamps,
+      historySummary
     )
   );
 
@@ -466,7 +561,9 @@ function renderHistory(items) {
       "Water level history",
       labels,
       waterValues,
-      "Water level (cm)"
+      "Water level (cm)",
+      timestamps,
+      historySummary
     )
   );
 }
@@ -593,7 +690,7 @@ async function refreshDashboard() {
       && healthResult[0].value?.status === "healthy";
 
     el.apiStatus.textContent =
-      healthOk ? "API healthy" : "API unavailable";
+      healthOk ? "API connection: Healthy" : "API connection: Unavailable";
 
     el.apiStatus.className =
       healthOk ? "healthy" : "error";
@@ -613,7 +710,7 @@ async function refreshDashboard() {
       );
     }
   } catch (error) {
-    el.apiStatus.textContent = "API unavailable";
+    el.apiStatus.textContent = "API connection: Unavailable";
     el.apiStatus.className = "error";
     showMessage(error.message || "The dashboard could not be refreshed.");
   } finally {
