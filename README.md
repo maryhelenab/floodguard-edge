@@ -1,4 +1,4 @@
-# FloodGuard Edge
+﻿# FloodGuard Edge
 
 [![FloodGuard CI/CD](https://github.com/maryhelenab/floodguard-edge/actions/workflows/main.yml/badge.svg)](https://github.com/maryhelenab/floodguard-edge/actions/workflows/main.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=maryhelenab_floodguard-edge&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=maryhelenab_floodguard-edge)
@@ -226,7 +226,7 @@ AWS Academy credentials are stored as GitHub Actions secrets and must be refresh
 
 | Measure | Result |
 |---|---|
-| Automated tests | 152 passed |
+| Automated tests | 164 passed |
 | Local test coverage | Approximately 92% |
 | SonarQube Cloud coverage | 91.5% |
 | Security rating | A |
@@ -319,7 +319,7 @@ python -m pytest -q
 Latest verified result:
 
 ```text
-152 passed
+164 passed
 ```
 
 The test suite covers:
