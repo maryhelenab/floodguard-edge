@@ -130,6 +130,22 @@ function risk(value) {
   return Object.hasOwn(RISK_ORDER, level) ? level : "UNKNOWN";
 }
 
+function recommendationForRisk(value) {
+  const level = risk(value);
+
+  const recommendations = {
+    NORMAL: "Continue routine monitoring.",
+    WATCH: "Increase monitoring frequency and inspect drainage conditions.",
+    WARNING: "Prepare a field inspection and monitor the zone closely.",
+    HIGH: "Dispatch an inspection team and prepare emergency response.",
+    CRITICAL: "Activate emergency response procedures immediately.",
+    INITIALISING: "Wait for enough sensor data before taking action.",
+    UNKNOWN: "No recommendation is currently available."
+  };
+
+  return recommendations[level] || recommendations.UNKNOWN;
+}
+
 // Format sensor values consistently and show an em dash for missing data.
 function number(value) {
   if (value === null || value === undefined) {
@@ -402,6 +418,10 @@ function renderCurrentZone() {
   el.riskScore.textContent = number(data.risk_score);
   renderReasons(data.reasons);
 
+  el.recommendedAction.textContent =
+  data.recommended_action
+  || recommendationForRisk(data.risk_level);
+
   el.rainfall.textContent = number(sensors.rainfall);
   el.waterLevel.textContent = number(sensors.water_level);
   el.flowRate.textContent = number(sensors.flow_rate);
@@ -584,8 +604,6 @@ function renderAlerts(items) {
     el.alertsList.appendChild(
       make("p", "No alerts recorded.", "card empty-state")
     );
-    el.recommendedAction.textContent =
-      "No recommendation available.";
     return;
   }
 
@@ -625,10 +643,6 @@ function renderAlerts(items) {
 
     el.alertsList.appendChild(card);
   });
-
-  el.recommendedAction.textContent =
-    payload(rows[0]).recommended_action
-    || "No recommendation available.";
 }
 
 // Fetch history and alerts together for the selected zone.
